@@ -1,7 +1,7 @@
 {
   "name": "dsh-eval-harness",
   "version": "1.0.0",
-  "description": "Framework-agnostic agent application development evaluation toolkit shipped as a DSH skill: offline/online suites judged from audit side effects, baseline diff with zero tolerance for safety regressions, and mutation tests proving the evaluators themselves catch regressions. Works with any agent framework (LangChain, LangChain4j, Spring AI, AutoGen, Dify, ...) given a programmable chat endpoint and queryable side effects. Documentation is in Chinese.",
+  "description": "Agent application evaluation toolkit shipped as a DSH skill: offline/online suites judged from audit side effects, baseline diff with zero tolerance for safety regressions, and mutation tests proving the evaluators themselves catch regressions. Framework-agnostic: needs a callable chat endpoint and queryable tool-call records. Documentation is in Chinese.",
   "type": "module",
   "main": "index.js",
   "files": [
