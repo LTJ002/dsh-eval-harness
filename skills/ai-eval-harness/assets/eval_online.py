@@ -211,7 +211,8 @@ def load(name: str) -> list[dict]:
         raise SystemExit(
             f"找不到数据集：{path}\n"
             f"请先从 skill 的 assets/datasets/ 复制 example 文件，按项目改写后再跑。")
-    with open(path, encoding="utf-8") as fh:
+    # utf-8-sig：兼容 PowerShell 生成数据集时带的 BOM 头；无 BOM 文件零影响
+    with open(path, encoding="utf-8-sig") as fh:
         return [json.loads(line) for line in fh if line.strip()]
 
 

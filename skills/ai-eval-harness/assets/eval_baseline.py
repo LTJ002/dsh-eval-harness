@@ -153,7 +153,8 @@ def load_results(path: str, *, exclude: str | None = None) -> dict[str, dict]:
 
     suites: dict[str, dict] = {}
     for fp in files:
-        with open(fp, encoding="utf-8") as fh:
+        # utf-8-sig：容忍 PowerShell/手写编辑器产生的 BOM；无 BOM 零影响
+        with open(fp, encoding="utf-8-sig") as fh:
             data = json.load(fh)
 
         # consolidate() 的 {"suites": {...}} 形状：先把内层取出来
@@ -191,7 +192,7 @@ def load_baseline(path: str) -> dict[str, dict]:
         {"results": [ {suite,passed,total,...} ]}  部分项目的历史形状
         {name: {passed,total,...}} 或 {name: [passed,total]}
     """
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8-sig") as fh:
         raw = json.load(fh)
 
     entries: list[dict] = []

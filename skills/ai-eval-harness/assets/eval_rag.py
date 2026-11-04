@@ -93,7 +93,9 @@ def load_cases(path: str) -> list[dict]:
                          f"请从 assets/datasets/rag-retrieval.example.jsonl 复制改写。")
     cases: list[dict] = []
     bad = 0
-    with open(path, encoding="utf-8") as fh:
+    # utf-8-sig：兼容 PowerShell Out-File 生成的 BOM 头（实测 BOM 会让
+    # 首行 json.loads 失败，整份"看起来为空"）；对无 BOM 文件零影响。
+    with open(path, encoding="utf-8-sig") as fh:
         for line in fh:
             line = line.strip()
             if not line:
