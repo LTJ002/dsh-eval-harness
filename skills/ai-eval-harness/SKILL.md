@@ -602,6 +602,9 @@ scripts/ 或 assets/
   eval_results.py      # 结果落盘
   eval_baseline.py     # 基线对比
   eval_online.py       # 在线评测
+  eval_rag.py          # RAG 检索层指标（Recall@K / MRR / nDCG@K / Precision@K）
+  eval_manifest.py     # 运行清单：提示词/数据集指纹 + config，回答"为什么和上次不一样"
+  ci-eval.yml.example  # CI/CD 三 gate 模板（自检+变异 / 离线基线 / 在线定时）
   selftest.py          # 判据与分母纪律的回归测试
   mutation_check.py    # 负向对照：把实现改坏，验证断言会翻红
   EvalResults.java     # JUnit 侧落盘（形状与 Python 一致）
@@ -632,6 +635,9 @@ python eval_baseline.py --results eval-results --baseline eval/baseline.json
 | `assets/eval_results.py` | 结果落盘（每个 suite 一个分片 + `kind` 字段，避免并发写丢数据） |
 | `assets/eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，分母变化不判定 |
 | `assets/eval_online.py` | 在线评测骨架，**已内置五条防误报的正确写法** |
+| `assets/eval_rag.py` | **RAG 检索层指标**：Recall@K / MRR / nDCG@K / Precision@K，纯函数可断言；双门（完全命中进 offline 基线零容忍 + 可选套件阈值） |
+| `assets/eval_manifest.py` | **运行清单**：提示词与数据集 sha256 指纹 + config + `manifest_diff()`，回答"这次和上次为什么不一样" |
+| `assets/ci-eval.yml.example` | **CI/CD 三 gate 模板**：评测器自检+变异 / 离线基线（退出码 1、2 都阻断）/ 在线定时 |
 | `assets/EvalResults.java` | JUnit 场景用，产出的 JSON 形状与 Python 版一致 |
 | `assets/datasets/*.example.jsonl` | 数据集样例 |
 | `assets/install.ps1` | 把 bundle 从仓库副本装到用户级 skill 根；`-VerifyOnly` 查两份是否分叉 |
