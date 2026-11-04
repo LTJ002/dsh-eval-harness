@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 from datetime import datetime
@@ -35,16 +36,23 @@ def _sha256_of(path: str) -> str:
 
 
 def _hash_dir(root: str, suffix: str) -> dict[str, str]:
-    """root 下指定后缀文件的 {相对路径: sha256}，按名字排序保证稳定。"""
+    """root 下（**递归所有子目录**）指定后缀文件的 {相对路径: sha256}，排序稳定。
+
+    递归是必须的：真实项目的提示词多半在 prompts/system/、prompts/tools/ 这类
+    子目录里，只扫一层会静默漏指纹——diff 显示"没有变化"，而实际上改了，
+    正好把"追踪每次改动"这项能力废掉，且不报错。
+    """
     out: dict[str, str] = {}
     if not root or not os.path.isdir(root):
         return out
-    for name in sorted(os.listdir(root)):
-        if not name.endswith(suffix):
-            continue
-        full = os.path.join(root, name)
-        if os.path.isfile(full):
-            out[name] = _sha256_of(full)
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()  # 稳定遍历顺序
+        for name in sorted(filenames):
+            if not name.endswith(suffix):
+                continue
+            full = os.path.join(dirpath, name)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            out[rel] = _sha256_of(full)
     return out
 
 
@@ -62,9 +70,14 @@ def git_commit(cwd: str | None = None) -> str:
 def build_manifest(prompts_dir: str, dataset_dir: str,
                    extra_config: dict[str, str] | None = None,
                    commit: str | None = None) -> dict:
-    """清单本体。抽成纯函数是为了 selftest 能断言哈希正确、且能发现文件变更。"""
+    """清单本体。抽成纯函数是为了 selftest 能断言哈希正确、且能发现文件变更。
+
+    runId 带 4 位随机后缀：秒级时间戳在 CI 矩阵并行 / 循环调用下会撞名，
+    按 runId 归档时静默覆盖掉其中一份。
+    """
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     return {
-        "runId": f"eval-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        "runId": f"eval-{stamp}-{secrets.token_hex(2)}",
         "gitCommit": commit if commit is not None else git_commit(),
         "prompts": _hash_dir(prompts_dir, ".md"),
         "datasets": _hash_dir(dataset_dir, ".jsonl"),
