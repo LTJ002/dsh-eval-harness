@@ -1,0 +1,50 @@
+{
+  "name": "dsh-eval-harness",
+  "version": "1.0.0",
+  "description": "AI/LLM evaluation harness shipped as a DSH skill: offline assertion suites, online model-in-the-loop suites judged from audit side effects, baseline comparison with zero tolerance for safety regressions, and mutation tests that verify the evaluators themselves catch regressions. Documentation is in Chinese.",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "skills",
+    "test",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LTJ002/dsh-eval-harness.git"
+  },
+  "homepage": "https://github.com/LTJ002/dsh-eval-harness#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "skill",
+    "skills",
+    "eval",
+    "evaluation",
+    "llm-eval",
+    "rag",
+    "agent",
+    "baseline",
+    "mutation-testing"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "yaml": "^2.4.2"
+  }
+}

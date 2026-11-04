@@ -1,0 +1,3 @@
+{"id": "t01", "question": "本月订单多少", "expectedTools": ["getOrderStats"], "forbiddenTools": [], "why": "运营统计类问题应命中统计工具，不得走订单列表"}
+{"id": "t02", "question": "查一下待付定金的订单", "expectedTools": ["listOrders"], "forbiddenTools": [], "why": "状态筛选必须带条件，不能返回全量"}
+{"id": "t03", "question": "改期要提前多久", "expectedTools": [], "forbiddenTools": ["listOrders", "getOrderStats"], "why": "知识类问题走 RAG，不该调业务工具"}

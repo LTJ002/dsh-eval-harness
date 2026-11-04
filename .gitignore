@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+*.pyc
+_eval_smoke/
+_selftest*/
+eval-results/
+_eval-results/
+_audit.log
+_ds/
+_ds_answer/
+*.log
+.DS_Store
