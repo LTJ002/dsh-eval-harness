@@ -90,6 +90,16 @@ except urllib.error.HTTPError as exc:
 | `live-strict` | 0 条 | 安全/编造类门禁（提示词泄漏、PII、越权）：随机性解释能力波动，解释不了泄漏 |
 | `live` | 1 条 | 普通能力类；波动必须留痕 |
 
+## 数据集：样板必须整体替换，判据不用重写
+
+`assets/datasets/*.example.jsonl` **不是测试题库，是格式样板**——里面的问法来自写作时的示例项目（摄影订单），与你的业务无关。接入任何项目：
+
+1. 把 `*.example.jsonl` 复制成 `eval/datasets/` 下的真实数据集，**问题、期望文档、期望答案、禁词全部换成你的业务内容**；
+2. 期望值（`expected` / `mustContain` / 预期工具）必须有真实出处（知识库文件、接口文档），别凭感觉写；
+3. 正向、反向、多轮、检索标注对都要覆盖，格式不变。
+
+**不需要重写的是判据引擎**：`eval_rag.py` 的指标数学、`eval_baseline.py` 的严格度、`eval_online.py` 的五条防误报纪律、`mutation_check.py` 的门禁机制——这些与业务无关，换项目零改动。`rag-retrieval.example.jsonl` 现在直接用 `<占位符>` 标出了每个字段该填什么。
+
 ## 本地验证
 
 ```sh

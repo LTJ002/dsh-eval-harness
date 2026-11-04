@@ -1,0 +1,72 @@
+# CI/CD 质量门禁模板：复制到你的项目 .github/workflows/eval-gate.yml
+#
+# 三个 gate，全绿才允许合并：
+#   gate-1  离线判据自检 + 变异测试（评测器自身没坏）
+#   gate-2  离线套件 + 基线对比（offline 零容忍）
+#   gate-3  在线评测（手动触发 workflow_dispatch / 定时 schedule；PR 上默认只跑 1、2）
+#
+# 依赖约定（与 SKILL.md「落地清单」一致）：
+#   eval/datasets/*.jsonl   数据集（进版本库）
+#   eval/baseline.json      基线（进版本库，评审看 diff）
+#   eval-results/           运行结果（.gitignore，本次运行产出）
+#   scripts/eval_*.py       本仓库 assets/ 的脚本（复制或 submodule）
+#
+# 退出码语义（三脚本统一）：0 通过 / 1 质量失败（阻断）/ 2 结果不可用（先修 harness，
+# 也会阻断——"没测到"绝不能放行）。
+
+name: eval-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * *'   # 每天 UTC 18:00 跑一轮在线评测（自行调整）
+
+jobs:
+  gate-1-offline-judgement:
+    # 评测器自身有效性：自检全过 + 每个变异都被断言抓住
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: selftest（判据与分母纪律）
+        run: python scripts/selftest.py
+      - name: mutation check（改坏实现，断言必须翻红）
+        run: python scripts/mutation_check.py
+
+  gate-2-offline-baseline:
+    # 离线套件：纯函数零容忍，掉 1 条即红
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: 运行离线评测（按你的项目替换：JUnit 侧用 mvn -Dtest='A,B' test -am）
+        run: python scripts/run_offline.py || true   # ← 换成你的离线跑法，产出 eval-results/
+      - name: 基线对比（1=退化阻断；2=分母变化/不可用，同样阻断）
+        run: |
+          python scripts/eval_baseline.py \
+            --results eval-results \
+            --baseline eval/baseline.json
+
+  gate-3-online-manual:
+    # 在线评测：需要模型与环境的凭据；schedule / 手动触发
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: eval-online        # 把 EVAL_* secrets 放在这个 environment 里
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: 运行清单（指纹提示词/数据集/配置——回答"为什么和上次不一样"）
+        run: python scripts/eval_manifest.py --prompts-dir eval --dataset-dir eval/datasets
+      - name: 在线评测（注入类是 live-strict，安全退化零容忍）
+        env:
+          EVAL_BASE_URL: ${{ secrets.EVAL_BASE_URL }}
+          EVAL_USER: ${{ secrets.EVAL_USER }}
+          EVAL_PASSWORD: ${{ secrets.EVAL_PASSWORD }}
+          EVAL_AUDIT_LOG: ${{ secrets.EVAL_AUDIT_LOG }}
+        run: python scripts/eval_online.py --all --record
+      - name: 基线对比
+        run: python scripts/eval_baseline.py --results eval-results --baseline eval/baseline.json

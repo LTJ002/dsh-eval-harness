@@ -21,6 +21,8 @@ SUBPROC_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
 import eval_baseline as B
 import eval_online as O
 import eval_results as R
+import eval_rag as RG
+import eval_manifest as M
 
 FAILED = []
 
@@ -559,6 +561,68 @@ check("同掉 1 条：live 容忍且留痕（与 live-strict 有区分度）",
 for f in t3.glob("*"):
     f.unlink()
 t3.rmdir()
+
+
+# ---------- RAG 检索层指标：纯函数必须有可断言的数学（不是只测"能跑"） ----------
+print("\n[10] RAG 检索指标（Recall/Precision/MRR/nDCG）")
+K = 4
+# 完全命中（第 1 位）
+check("全命中 recall=1", RG.recall_at_k(["d1", "d2"], ["d1", "d2", "d9"], K) == 1.0)
+# 命中一半：分母是标注数，与返回了多少条无关
+check("漏检 recall=0.5", RG.recall_at_k(["d1", "d2"], ["d1", "d9", "d3", "d8"], K) == 0.5)
+# 期望 3 篇只召回 1 篇 → 1/3（验证分母不取整、不变成 0.5）
+check("recall 分母=标注数", abs(RG.recall_at_k(["d1", "d2", "d3"], ["d1"], K) - 1 / 3) < 1e-9)
+# top-k 截断：命中的文档排在 k 之外不算数
+check("k 之外不算命中", RG.recall_at_k(["d5"], ["d1", "d2", "d3", "d4", "d5"], K) == 0.0)
+# 越界 k / 空 expected 的边界
+check("k=0 recall=0", RG.recall_at_k(["d1"], ["d1"], 0) == 0.0)
+check("空 expected recall=0", RG.recall_at_k([], ["d1"], K) == 0.0)
+# Precision 分母是 k
+check("P@4=2/4", RG.precision_at_k(["d1", "d2"], ["d1", "d9", "d2", "d8"], 4) == 0.5)
+# MRR：第一位 1.0，第三位 1/3，未命中 0
+check("MRR 首位=1", RG.mrr(["d1"], ["d1", "d2", "d3"], K) == 1.0)
+check("MRR 第三位=1/3", abs(RG.mrr(["d3"], ["d1", "d2", "d3"], K) - 1 / 3) < 1e-9)
+check("MRR 未命中=0", RG.mrr(["dx"], ["d1", "d2"], K) == 0.0)
+# nDCG：全命中且都在 ideal 位次 → 1；命中但垫底 → 明显小于 1
+check("nDCG 理想=1", abs(RG.ndcg_at_k(["d1", "d2"], ["d1", "d2", "d9", "d8"], K) - 1.0) < 1e-9)
+check("nDCG 垫底<1", RG.ndcg_at_k(["d1"], ["d9", "d8", "d7", "d1"], K) < 0.5)
+# 重复 id 只算一次，不虚增命中
+check("重复 id 不虚增", RG.recall_at_k(["d1"], ["d1", "d1", "d1", "d1"], K) == 1.0)
+
+# ---------- 运行清单：指纹必须真实、能发现变更 ----------
+print("\n[11] 运行清单（manifest）")
+md = Path("_mf_md")
+dsd = Path("_mf_ds")
+md.mkdir(exist_ok=True)
+dsd.mkdir(exist_ok=True)
+(md / "system-prompt.md").write_text("规则 A：不得编造", encoding="utf-8")
+(dsd / "online-answer.jsonl").write_text('{"id":"a1"}\n', encoding="utf-8")
+
+m1 = M.build_manifest(str(md), str(dsd), {"topK": "4"}, commit="abc1234")
+check("指纹到提示词文件", "system-prompt.md" in m1["prompts"], str(m1["prompts"]))
+check("指纹到数据集文件", "online-answer.jsonl" in m1["datasets"], str(m1["datasets"]))
+check("config 原样记录", m1["config"] == {"topK": "4"}, str(m1["config"]))
+check("commit 显式传入优先", m1["gitCommit"] == "abc1234")
+# sha256 必须是对文件内容算的：改一个字，指纹必须变（这是"追踪改动影响"的根）
+import hashlib
+check("sha256 与文件内容一致",
+      m1["prompts"]["system-prompt.md"] == hashlib.sha256("规则 A：不得编造".encode("utf-8")).hexdigest())
+(md / "system-prompt.md").write_text("规则 A：不得编造。", encoding="utf-8")
+m2 = M.build_manifest(str(md), str(dsd), {"topK": "4"}, commit="abc1234")
+diffs = M.manifest_diff(m1, m2)
+check("改一个字被指纹发现", any("system-prompt.md" in d and "内容变化" in d for d in diffs), str(diffs))
+check("无变化时 diff 为空", M.manifest_diff(m2, m2) == [])
+# config 变化也要被 diff 抓到
+m3 = M.build_manifest(str(md), str(dsd), {"topK": "8"}, commit="abc1234")
+check("config 变化进 diff", any("config/topK" in d for d in M.manifest_diff(m2, m3)))
+# 目录不存在时如实为空，不编造
+m4 = M.build_manifest(str(md / "不存在"), str(dsd), {}, commit="x")
+check("目录不存在 → 空指纹不编造", m4["prompts"] == {})
+
+md.joinpath("system-prompt.md").unlink()
+(dsd / "online-answer.jsonl").unlink()
+dsd.rmdir()
+md.rmdir()
 
 
 for f in t2.glob("*"):
