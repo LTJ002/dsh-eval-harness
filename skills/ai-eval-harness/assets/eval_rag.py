@@ -23,6 +23,11 @@ selftest 直接断言它们的值；结果默认按 **offline** kind 落盘：
    低于即退出码 1。不设就只报告（exit 0），把判定留给基线。
 
 退出码：0 有用例且（未设阈值或达标）；1 低于阈值；2 数据集缺失/为空/全坏行。
+
+数据集纪律（脚本会主动提示，不静默产假结果）：
+- expected 重复写同一 id 不会虚低 recall（分母去重），但仍是标注噪声，建议去重；
+- 单条用例 expected 篇数 > k 时 recall@k 数学上到不了 1，脚本打 WARN 指向数据集；
+- 阈值门未过时 **不落盘**，避免失败结果被后续 --update 当成基线。
 """
 from __future__ import annotations
 
@@ -49,15 +54,21 @@ def _ranked(retrieved: list[str], k: int) -> list[str]:
 
 
 def recall_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
-    """|期望 ∩ top-k| / |期望|。分母永远是标注数，与返回了多少条无关。"""
+    """|期望 ∩ top-k| / |期望|。分母是**去重后**的标注数，与返回了多少条无关。
+
+    expected 去重是必须的：标注里重复写同一个 id（录入手误的典型形态）时，
+    若分母不去重，检索完全正确也永远拿不到 1.0——"完全命中"门会静默失效，
+    后续基线对比被一个偏低的错位基线掩盖真实退化。
+    """
     if not expected:
         return 0.0
-    hits = set(expected) & set(_ranked(retrieved, k))
-    return len(hits) / len(expected)
+    wanted = set(expected)
+    hits = wanted & set(_ranked(retrieved, k))
+    return len(hits) / len(wanted)
 
 
 def precision_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
-    """|期望 ∩ top-k| / k。"""
+    """|期望 ∩ top-k| / k。期望同样去重后再取交集。"""
     if k <= 0:
         return 0.0
     hits = set(expected) & set(_ranked(retrieved, k))
@@ -75,14 +86,14 @@ def mrr(expected: list[str], retrieved: list[str], k: int) -> float:
 
 
 def ndcg_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
-    """二元相关增益的 nDCG@K。"""
+    """二元相关增益的 nDCG@K。expected 去重后计算 ideal 长度。"""
     if not expected or k <= 0:
         return 0.0
     ranked = _ranked(retrieved, k)
     expected_set = set(expected)
     dcg = sum(1.0 / math.log2(i + 1) for i, doc in enumerate(ranked, start=1)
               if doc in expected_set)
-    ideal_len = min(len(expected), k)
+    ideal_len = min(len(expected_set), k)
     idcg = sum(1.0 / math.log2(i + 1) for i in range(1, ideal_len + 1))
     return dcg / idcg if idcg > 0 else 0.0
 
@@ -139,6 +150,13 @@ def main() -> int:
     for c in cases:
         k = int(c.get("k") or args.top_k)
         exp, ret = c["expected"], c["retrieved"]
+        wanted = len(set(exp))
+        if wanted > k:
+            # 期望篇数超过检索窗口：recall@k 数学上到不了 1，用例恒红。
+            # 这是**数据集问题**，不是被测系统的错——必须指出来，否则使用者
+            # 会去查检索服务，查一个不存在的问题。
+            print(f'[WARN] {c["id"]}: 期望 {wanted} 篇 > k={k}，该用例不可能完全命中；'
+                  f'请调大 k 或拆小期望集')
         r = recall_at_k(exp, ret, k)
         row = {
             "id": c["id"], "k": k,
@@ -170,25 +188,35 @@ def main() -> int:
           f"MRR={mean['mrr']:.3f}  nDCG={mean['ndcg']:.3f}")
     print(f"完全命中（期望全部进 top-k）：{full_hits}/{n}")
 
-    if args.record:
-        try:
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            import eval_results  # noqa: PLC0415
-            path = eval_results.record("RAG 检索", full_hits, n, failures)
-            print(f"  已记录（offline，基线按完全命中条数判退化）: {path}")
-        except ImportError:
-            print("  (未找到 eval_results.py，跳过落盘)")
+    gate_failed = []
+    if args.min_recall is not None and mean["recall"] < args.min_recall:
+        gate_failed.append(f"平均 Recall {mean['recall']:.3f} < 阈值 {args.min_recall}")
+    if args.min_mrr is not None and mean["mrr"] < args.min_mrr:
+        gate_failed.append(f"平均 MRR {mean['mrr']:.3f} < 阈值 {args.min_mrr}")
 
     if failures:
         print("\n未完全命中的用例：")
         for f in failures:
             print(f"  - {f}")
 
-    if args.min_recall is not None and mean["recall"] < args.min_recall:
-        print(f"[FAIL] 平均 Recall {mean['recall']:.3f} < 阈值 {args.min_recall}")
-        return 1
-    if args.min_mrr is not None and mean["mrr"] < args.min_mrr:
-        print(f"[FAIL] 平均 MRR {mean['mrr']:.3f} < 阈值 {args.min_mrr}")
+    # 落盘放在阈值门判定**之后**：本轮已经被判失败时不留分片，
+    # 否则下次 --update 会把这个失败结果当成基线（与 eval_online 的
+    # "tested==0 不落盘"同一纪律）。
+    if args.record:
+        if gate_failed:
+            print("\n[SKIP 落盘] 阈值门未过，本轮结果不作为基线输入。")
+        else:
+            try:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                import eval_results  # noqa: PLC0415
+                path = eval_results.record("RAG 检索", full_hits, n, failures)
+                print(f"\n  已记录（offline，基线按完全命中条数判退化）: {path}")
+            except ImportError:
+                print("\n  (未找到 eval_results.py，跳过落盘)")
+
+    if gate_failed:
+        for msg in gate_failed:
+            print(f"[FAIL] {msg}")
         return 1
     return 0
 
