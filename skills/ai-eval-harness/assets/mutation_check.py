@@ -229,6 +229,28 @@ MUTATIONS = [
         "    if False:",
         "record_live 拒绝非法 kind（防静默写错档位）",
     ),
+    # ---- RAG 指标与运行清单（本轮新增能力的对应变异）----
+    (
+        "RAG recall 分母换成返回条数",
+        "eval_rag.py",
+        "    return len(hits) / len(expected)",
+        "    return len(hits) / max(len(retrieved), 1)",
+        "漏检 recall=0.5",
+    ),
+    (
+        "RAG 命中不再按 top-k 截断",
+        "eval_rag.py",
+        "    for doc in retrieved[:k]:",
+        "    for doc in retrieved:",
+        "k 之外不算命中",
+    ),
+    (
+        "manifest 指纹退化为常量",
+        "eval_manifest.py",
+        '        return hashlib.sha256(fh.read()).hexdigest()',
+        '        return "0" * 64',
+        "sha256 与文件内容一致",
+    ),
 ]
 
 
