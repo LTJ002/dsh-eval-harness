@@ -7,6 +7,16 @@
 
 > 文档与技能正文为中文；README 另提供[英文版](README.en.md)。
 
+## 什么时候用
+
+| 场景 | 用它做什么 |
+|---|---|
+| 为 LLM/Agent 应用建立质量度量 | 从零搭起"离线断言 + 在线真打模型 + 基线对比"三层评测 |
+| 改完 RAG / 工具 / 提示词，要证明没退化 | 与基线按用例对比，掉条数就红，安全类零容忍 |
+| 评测全绿，线上仍出问题 | 用四陷阱清单与根因分层逐项核对判据，找假绿 |
+| 怀疑评测脚本在骗自己 | 跑 `mutation_check.py`：改坏实现看断言敢不敢红 |
+| 数字"看起来对"但不敢信 | 五态结果契约 + 分母纪律 + 小样本标注，让每个数字可解释 |
+
 ## 安装
 
 ```sh
@@ -18,6 +28,21 @@ dsh plugin add https://github.com/LTJ002/dsh-eval-harness
 ## 它是什么 / 不是什么
 
 这是一个**技能包**：`skills/ai-eval-harness/SKILL.md` 是给模型读的方法论（判据设计、陷阱清单、基线纪律），`skills/ai-eval-harness/assets/` 是可直接运行/改写的评测实现（Python 标准库实现，JUnit 落盘器用 Java）。它不提供任何 UI 或会话命令——所有能力都通过技能正文与资产脚本体现。
+
+## 适用范围：所有 agent 应用开发框架
+
+本工具**框架无关**：不绑定、不内置、也不需要任何 agent 开发框架的 SDK。任何框架构建的 Agent 应用——LangChain、LangChain4j、Spring AI、AutoGen、CrewAI、Dify 等——只要满足两个前提，就能用同一套评测：
+
+1. **对话可编程访问**——应用暴露可调用的对话接口（HTTP/SSE 均可；`eval_online.py` 用标准库 urllib 对接，`login()` / `chat()` 按你的项目契约改写）；
+2. **副作用可查询**——工具调用、写操作等副作用留有可查询的记录（审计表、结构化日志或 DB）——判据从外部事实读取，不读模型的自我陈述。
+
+前提与框架解耦，所以评测方法学（双向判据、分母纪律、基线对比、变异测试）跨框架通用；换框架只改适配层，不改判据。评测器集成层按项目语言选择：
+
+- **Python 项目**：`assets/` 下脚本直接可用（仅标准库）；
+- **Java/JUnit 项目**：用 `EvalResults.java` 产出与 Python 同形的 JSON 分片；
+- **其他语言**：只要能写出约定 JSON 形状的结果分片，`eval_baseline.py` 就能消费（形状见 [assets/README.md](skills/ai-eval-harness/assets/README.md)）。
+
+文档中提及 LangChain / LangChain4j 仅用于解释切片参数的计量单位语义，**不构成对任何具体框架的集成声明**。
 
 ## 资产一览
 

@@ -7,6 +7,16 @@ An **agent application development evaluation toolkit** for DeepSeek Harness (DS
 
 > The skill body and evaluator docs are written in Chinese; see the [Chinese README](README.md) for the full narrative. This file is a functional summary.
 
+## When to use
+
+| scenario | what it does for you |
+|---|---|
+| building quality metrics for an LLM/agent app | stand up the three-layer loop: offline assertions + online model-in-the-loop + baseline diff |
+| proving a RAG / tool / prompt change did not regress | compare case-by-case against the baseline; any drop goes red, safety regressions have zero tolerance |
+| evals are green but users still hit failures | walk the four-trap catalog and the root-cause layers to find the false green |
+| suspecting your eval script lies to itself | run `mutation_check.py`: break the implementation, see whether the assertions dare to go red |
+| numbers "look right" but you cannot trust them | five-state result contract, denominator discipline, small-n annotations — every number explains itself |
+
 ## Install
 
 ```sh
@@ -18,6 +28,21 @@ The skill registers as a bundled provider on `ctx.skills` (rank 600) — no need
 ## What it is / is not
 
 This is a **skill pack**: `skills/ai-eval-harness/SKILL.md` is the methodology the model reads (criterion design, trap catalog, baseline discipline), and `skills/ai-eval-harness/assets/` contains ready-to-run evaluation implementations (Python standard library; a Java writer for JUnit result shards). It ships no UI and no session commands — everything lives in the skill body and the asset scripts.
+
+## Scope: works with every agent development framework
+
+The toolkit is **framework-agnostic**: it binds to, embeds, and requires no agent framework SDK. Agent applications built with any framework — LangChain, LangChain4j, Spring AI, AutoGen, CrewAI, Dify, and others — can be evaluated by the same suite given two prerequisites:
+
+1. **Programmable chat access** — the app exposes a callable chat endpoint (HTTP/SSE both fine; `eval_online.py` talks to it with the Python standard library, rewrite `login()` / `chat()` for your contract);
+2. **Queryable side effects** — tool calls and writes leave queryable records (audit table, structured logs, or DB) — criteria read external facts, never the model's self-report.
+
+Because the prerequisites are decoupled from the framework, the methodology (bidirectional criteria, denominator discipline, baseline diff, mutation testing) transfers across frameworks; switching frameworks changes the adapter, not the criteria. The evaluator integration layer follows your project language:
+
+- **Python projects**: the `assets/` scripts work as-is (stdlib only);
+- **Java/JUnit projects**: `EvalResults.java` produces JSON shards shaped identically to the Python ones;
+- **Any other language**: anything that can write result shards in the agreed JSON shape feeds `eval_baseline.py` (shape documented in [assets/README.md](skills/ai-eval-harness/assets/README.md)).
+
+LangChain / LangChain4j appear in the docs only as examples when explaining chunker size units — **this is not an integration statement for any specific framework**.
 
 ## Assets
 
