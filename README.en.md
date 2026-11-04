@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
 
-An AI/LLM evaluation skill for DeepSeek Harness (DSH). The point is not to produce scores but to make **every number reproducible, comparable, and honest**: judgments come from external facts (audit tables, server-side structured results, deterministic rules), criteria are bidirectional (should-have-answered vs. should-not-have-answered), and mutation tests prove the evaluators themselves catch regressions.
+An **agent application development evaluation toolkit** for DeepSeek Harness (DSH). The point is not to produce scores but to make **every number reproducible, comparable, and honest**: judgments come from external facts (audit tables, server-side structured results, deterministic rules), criteria are bidirectional (should-have-answered vs. should-not-have-answered), and mutation tests prove the evaluators themselves catch regressions. Covers RAG retrieval, tool calls, prompt safety, and multi-turn evaluation design.
 
 > The skill body and evaluator docs are written in Chinese; see the [Chinese README](README.md) for the full narrative. This file is a functional summary.
 

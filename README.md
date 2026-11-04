@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
 
-面向 DeepSeek Harness（DSH）的 AI/LLM 评测技能。核心不是跑分，而是**让每个数字都可复现、可比较、且不骗人**：判定依据必须来自外部事实（审计表、服务端结构化结果、确定性规则），判据必须双向（该答未答 / 不该答却答了），并且用变异测试证明评测器自己没坏。
+面向 DeepSeek Harness（DSH）的 **Agent 应用开发评测工具**。核心不是跑分，而是**让每个数字都可复现、可比较、且不骗人**：判定依据必须来自外部事实（审计表、服务端结构化结果、确定性规则），判据必须双向（该答未答 / 不该答却答了），并且用变异测试证明评测器自己没坏。覆盖 RAG 检索、工具调用、提示词安全与多轮对话的评测设计。
 
 > 文档与技能正文为中文；README 另提供[英文版](README.en.md)。
 

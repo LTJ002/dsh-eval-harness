@@ -1,7 +1,7 @@
 {
   "name": "dsh-eval-harness",
   "version": "1.0.0",
-  "description": "AI/LLM evaluation harness shipped as a DSH skill: offline assertion suites, online model-in-the-loop suites judged from audit side effects, baseline comparison with zero tolerance for safety regressions, and mutation tests that verify the evaluators themselves catch regressions. Documentation is in Chinese.",
+  "description": "Agent application development evaluation toolkit shipped as a DSH skill: offline/online suites judged from audit side effects, baseline diff with zero tolerance for safety regressions, and mutation tests proving the evaluators themselves catch regressions. Documentation is in Chinese.",
   "type": "module",
   "main": "index.js",
   "files": [
