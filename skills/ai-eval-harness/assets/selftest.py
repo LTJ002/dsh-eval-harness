@@ -565,7 +565,7 @@ t3.rmdir()
 
 # ---------- RAG 检索层指标：纯函数必须有可断言的数学（不是只测"能跑"） ----------
 print("\n[10] RAG 检索指标（Recall/Precision/MRR/nDCG）")
-K = 4
+K = 4  # 本段专用；与其它段落不共享，避免模块级变量被后续段落改写
 # 完全命中（第 1 位）
 check("全命中 recall=1", RG.recall_at_k(["d1", "d2"], ["d1", "d2", "d9"], K) == 1.0)
 # 命中一半：分母是标注数，与返回了多少条无关
@@ -588,6 +588,13 @@ check("nDCG 理想=1", abs(RG.ndcg_at_k(["d1", "d2"], ["d1", "d2", "d9", "d8"], 
 check("nDCG 垫底<1", RG.ndcg_at_k(["d1"], ["d9", "d8", "d7", "d1"], K) < 0.5)
 # 重复 id 只算一次，不虚增命中
 check("重复 id 不虚增", RG.recall_at_k(["d1"], ["d1", "d1", "d1", "d1"], K) == 1.0)
+# expected 重复时，检索完全正确也必须能拿到 1.0（分母去重，否则"完全命中"门静默失效）
+check("expected 重复仍能完全命中",
+      RG.recall_at_k(["d1", "d1"], ["d1"], K) == 1.0)
+check("expected 重复时 nDCG=1",
+      abs(RG.ndcg_at_k(["d1", "d1"], ["d1"], K) - 1.0) < 1e-9)
+check("expected 重复时 precision 不虚低",
+      RG.precision_at_k(["d1", "d1"], ["d1", "d9", "d8", "d7"], 4) == 0.25)
 
 # ---------- 运行清单：指纹必须真实、能发现变更 ----------
 print("\n[11] 运行清单（manifest）")
@@ -619,6 +626,24 @@ check("config 变化进 diff", any("config/topK" in d for d in M.manifest_diff(m
 m4 = M.build_manifest(str(md / "不存在"), str(dsd), {}, commit="x")
 check("目录不存在 → 空指纹不编造", m4["prompts"] == {})
 
+# 子目录里的提示词必须被递归指纹到——只扫一层会静默漏掉，diff 显示"没变化"
+(md / "system").mkdir(exist_ok=True)
+(md / "system" / "nested-prompt.md").write_text("嵌套规则", encoding="utf-8")
+m5 = M.build_manifest(str(md), str(dsd), {}, commit="abc1234")
+check("递归指纹到子目录提示词", "system/nested-prompt.md" in m5["prompts"], str(m5["prompts"]))
+# 子目录里改了字也要能被 diff 发现
+(md / "system" / "nested-prompt.md").write_text("嵌套规则改", encoding="utf-8")
+m6 = M.build_manifest(str(md), str(dsd), {}, commit="abc1234")
+check("子目录改动进 diff",
+      any("system/nested-prompt.md" in d for d in M.manifest_diff(m5, m6)),
+      str(M.manifest_diff(m5, m6)))
+
+# runId 必须唯一：同秒生成两份不能重名，否则按 runId 归档会静默覆盖
+check("同秒两次 runId 不同", M.build_manifest(str(md), str(dsd), {})["runId"]
+      != M.build_manifest(str(md), str(dsd), {})["runId"])
+
+md.joinpath("system", "nested-prompt.md").unlink()
+(md / "system").rmdir()
 md.joinpath("system-prompt.md").unlink()
 (dsd / "online-answer.jsonl").unlink()
 dsd.rmdir()
