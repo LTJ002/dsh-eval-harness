@@ -1,119 +1,99 @@
-# dsh-eval-harness
+﻿# dsh-eval-harness
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
 
-面向 DeepSeek Harness（DSH）的 **Agent 应用开发评测工具**。核心不是跑分，而是**让每个数字都可复现、可比较、且不骗人**：判定依据必须来自外部事实（审计表、服务端结构化结果、确定性规则），判据必须双向（该答未答 / 不该答却答了），并且用变异测试证明评测器自己没坏。覆盖 RAG 检索、工具调用、提示词安全与多轮对话的评测设计。
+闈㈠悜 DeepSeek Harness锛圖SH锛夌殑 **Agent 搴旂敤寮€鍙戣瘎娴嬪伐鍏?*銆傛牳蹇冧笉鏄窇鍒嗭紝鑰屾槸**璁╂瘡涓暟瀛楅兘鍙鐜般€佸彲姣旇緝銆佷笖涓嶉獥浜?*锛氬垽瀹氫緷鎹繀椤绘潵鑷閮ㄤ簨瀹烇紙瀹¤琛ㄣ€佹湇鍔＄缁撴瀯鍖栫粨鏋溿€佺‘瀹氭€ц鍒欙級锛屽垽鎹繀椤诲弻鍚戯紙璇ョ瓟鏈瓟 / 涓嶈绛斿嵈绛斾簡锛夛紝骞朵笖鐢ㄥ彉寮傛祴璇曡瘉鏄庤瘎娴嬪櫒鑷繁娌″潖銆傝鐩?RAG 妫€绱€佸伐鍏疯皟鐢ㄣ€佹彁绀鸿瘝瀹夊叏涓庡杞璇濈殑璇勬祴璁捐銆?
+> 鏂囨。涓庢妧鑳芥鏂囦负涓枃锛汻EADME 鍙︽彁渚沎鑻辨枃鐗圿(README.en.md)銆?
+## 浠€涔堟椂鍊欑敤
 
-> 文档与技能正文为中文；README 另提供[英文版](README.en.md)。
-
-## 什么时候用
-
-| 场景 | 用它做什么 |
+| 鍦烘櫙 | 鐢ㄥ畠鍋氫粈涔?|
 |---|---|
-| 为 LLM/Agent 应用建立质量度量 | 从零搭起"离线断言 + 在线真打模型 + 基线对比"三层评测 |
-| 改完 RAG / 工具 / 提示词，要证明没退化 | 与基线按用例对比，掉条数就红，安全类零容忍 |
-| 评测全绿，线上仍出问题 | 用四陷阱清单与根因分层逐项核对判据，找假绿 |
-| 怀疑评测脚本在骗自己 | 跑 `mutation_check.py`：改坏实现看断言敢不敢红 |
-| 数字"看起来对"但不敢信 | 五态结果契约 + 分母纪律 + 小样本标注，让每个数字可解释 |
+| 涓?LLM/Agent 搴旂敤寤虹珛璐ㄩ噺搴﹂噺 | 浠庨浂鎼捣"绂荤嚎鏂█ + 鍦ㄧ嚎鐪熸墦妯″瀷 + 鍩虹嚎瀵规瘮"涓夊眰璇勬祴 |
+| 鏀瑰畬 RAG / 宸ュ叿 / 鎻愮ず璇嶏紝瑕佽瘉鏄庢病閫€鍖?| 涓庡熀绾挎寜鐢ㄤ緥瀵规瘮锛屾帀鏉℃暟灏辩孩锛屽畨鍏ㄧ被闆跺蹇?|
+| 璇勬祴鍏ㄧ豢锛岀嚎涓婁粛鍑洪棶棰?| 鐢ㄥ洓闄烽槺娓呭崟涓庢牴鍥犲垎灞傞€愰」鏍稿鍒ゆ嵁锛屾壘鍋囩豢 |
+| 鎬€鐤戣瘎娴嬭剼鏈湪楠楄嚜宸?| 璺?`mutation_check.py`锛氭敼鍧忓疄鐜扮湅鏂█鏁笉鏁㈢孩 |
+| 鏁板瓧"鐪嬭捣鏉ュ"浣嗕笉鏁俊 | 浜旀€佺粨鏋滃绾?+ 鍒嗘瘝绾緥 + 灏忔牱鏈爣娉紝璁╂瘡涓暟瀛楀彲瑙ｉ噴 |
 
-## 安装
+## 瀹夎
 
 ```sh
 dsh plugin add https://github.com/LTJ002/dsh-eval-harness
 ```
 
-技能会以 bundled provider 的形式出现在 `ctx.skills` 中（rank 600），会话内通过技能目录或 `@ai-eval-harness` 引用；无需复制到项目的 `.agents/skills`。
+鎶€鑳戒細浠?bundled provider 鐨勫舰寮忓嚭鐜板湪 `ctx.skills` 涓紙rank 600锛夛紝浼氳瘽鍐呴€氳繃鎶€鑳界洰褰曟垨 `@ai-eval-harness` 寮曠敤锛涙棤闇€澶嶅埗鍒伴」鐩殑 `.agents/skills`銆?
+## 瀹冩槸浠€涔?/ 涓嶆槸浠€涔?
+杩欐槸涓€涓?*鎶€鑳藉寘**锛歚skills/ai-eval-harness/SKILL.md` 鏄粰妯″瀷璇荤殑鏂规硶璁猴紙鍒ゆ嵁璁捐銆侀櫡闃辨竻鍗曘€佸熀绾跨邯寰嬶級锛宍skills/ai-eval-harness/assets/` 鏄彲鐩存帴杩愯/鏀瑰啓鐨勮瘎娴嬪疄鐜帮紙Python 鏍囧噯搴撳疄鐜帮紝JUnit 钀界洏鍣ㄧ敤 Java锛夈€傚畠涓嶆彁渚涗换浣?UI 鎴栦細璇濆懡浠も€斺€旀墍鏈夎兘鍔涢兘閫氳繃鎶€鑳芥鏂囦笌璧勪骇鑴氭湰浣撶幇銆?
+## 閫傜敤鑼冨洿锛氭墍鏈?agent 搴旂敤寮€鍙戞鏋?
+鏈伐鍏?*妗嗘灦鏃犲叧**锛氫笉缁戝畾銆佷笉鍐呯疆銆佷篃涓嶉渶瑕佷换浣?agent 寮€鍙戞鏋剁殑 SDK銆備换浣曟鏋舵瀯寤虹殑 Agent 搴旂敤鈥斺€擫angChain銆丩angChain4j銆丼pring AI銆丄utoGen銆丆rewAI銆丏ify 绛夆€斺€斿彧瑕佹弧瓒充袱涓墠鎻愶紝灏辫兘鐢ㄥ悓涓€濂楄瘎娴嬶細
 
-## 它是什么 / 不是什么
-
-这是一个**技能包**：`skills/ai-eval-harness/SKILL.md` 是给模型读的方法论（判据设计、陷阱清单、基线纪律），`skills/ai-eval-harness/assets/` 是可直接运行/改写的评测实现（Python 标准库实现，JUnit 落盘器用 Java）。它不提供任何 UI 或会话命令——所有能力都通过技能正文与资产脚本体现。
-
-## 适用范围：所有 agent 应用开发框架
-
-本工具**框架无关**：不绑定、不内置、也不需要任何 agent 开发框架的 SDK。任何框架构建的 Agent 应用——LangChain、LangChain4j、Spring AI、AutoGen、CrewAI、Dify 等——只要满足两个前提，就能用同一套评测：
-
-1. **对话可编程访问**——应用暴露可调用的对话接口（HTTP/SSE 均可；`eval_online.py` 用标准库 urllib 对接，`login()` / `chat()` 按你的项目契约改写）；
-2. **副作用可查询**——工具调用、写操作等副作用留有可查询的记录（审计表、结构化日志或 DB）——判据从外部事实读取，不读模型的自我陈述。
-
-前提与框架解耦，所以评测方法学（双向判据、分母纪律、基线对比、变异测试）跨框架通用；换框架只改适配层，不改判据。评测器集成层按项目语言选择：
-
-- **Python 项目**：`assets/` 下脚本直接可用（仅标准库）；
-- **Java/JUnit 项目**：用 `EvalResults.java` 产出与 Python 同形的 JSON 分片；
-- **其他语言**：只要能写出约定 JSON 形状的结果分片，`eval_baseline.py` 就能消费（形状见 [assets/README.md](skills/ai-eval-harness/assets/README.md)）。
-
-文档中提及 LangChain / LangChain4j 仅用于解释切片参数的计量单位语义，**不构成对任何具体框架的集成声明**。
-
-## 资产一览
-
-| 文件 | 用途 |
+1. **瀵硅瘽鍙紪绋嬭闂?*鈥斺€斿簲鐢ㄦ毚闇插彲璋冪敤鐨勫璇濇帴鍙ｏ紙HTTP/SSE 鍧囧彲锛沗eval_online.py` 鐢ㄦ爣鍑嗗簱 urllib 瀵规帴锛宍login()` / `chat()` 鎸変綘鐨勯」鐩绾︽敼鍐欙級锛?2. **鍓綔鐢ㄥ彲鏌ヨ**鈥斺€斿伐鍏疯皟鐢ㄣ€佸啓鎿嶄綔绛夊壇浣滅敤鐣欐湁鍙煡璇㈢殑璁板綍锛堝璁¤〃銆佺粨鏋勫寲鏃ュ織鎴?DB锛夆€斺€斿垽鎹粠澶栭儴浜嬪疄璇诲彇锛屼笉璇绘ā鍨嬬殑鑷垜闄堣堪銆?
+鍓嶆彁涓庢鏋惰В鑰︼紝鎵€浠ヨ瘎娴嬫柟娉曞锛堝弻鍚戝垽鎹€佸垎姣嶇邯寰嬨€佸熀绾垮姣斻€佸彉寮傛祴璇曪級璺ㄦ鏋堕€氱敤锛涙崲妗嗘灦鍙敼閫傞厤灞傦紝涓嶆敼鍒ゆ嵁銆傝瘎娴嬪櫒闆嗘垚灞傛寜椤圭洰璇█閫夋嫨锛?
+- **Python 椤圭洰**锛歚assets/` 涓嬭剼鏈洿鎺ュ彲鐢紙浠呮爣鍑嗗簱锛夛紱
+- **Java/JUnit 椤圭洰**锛氱敤 `EvalResults.java` 浜у嚭涓?Python 鍚屽舰鐨?JSON 鍒嗙墖锛?- **鍏朵粬璇█**锛氬彧瑕佽兘鍐欏嚭绾﹀畾 JSON 褰㈢姸鐨勭粨鏋滃垎鐗囷紝`eval_baseline.py` 灏辫兘娑堣垂锛堝舰鐘惰 [assets/README.md](skills/ai-eval-harness/assets/README.md)锛夈€?
+鏂囨。涓彁鍙?LangChain / LangChain4j 浠呯敤浜庤В閲婂垏鐗囧弬鏁扮殑璁￠噺鍗曚綅璇箟锛?*涓嶆瀯鎴愬浠讳綍鍏蜂綋妗嗘灦鐨勯泦鎴愬０鏄?*銆?
+## 璧勪骇涓€瑙?
+| 鏂囦欢 | 鐢ㄩ€?|
 |---|---|
-| `assets/eval_results.py` | 结果落盘（分片 + `kind` 字段，防并发覆盖） |
-| `assets/eval_baseline.py` | 基线对比：按绝对条数判退化；offline / **live-strict** / live 三档严格度；分母变化不判定 |
-| `assets/eval_online.py` | 在线评测骨架：`tool` / `inject` / `answer` 三套件，内置五条防误报纪律 |
-| `assets/selftest.py` | 判据与分母纪律的回归自检（改任何脚本后必跑） |
-| `assets/mutation_check.py` | 变异测试：把实现改坏，验证断言会翻红；在临时副本上施加变异 |
-| `assets/EvalResults.java` | JUnit 场景的结果落盘，JSON 形状与 Python 版一致 |
-| `assets/datasets/*.example.jsonl` | 数据集样例（换项目必须整体替换） |
-| `assets/install.ps1` | 把 bundle 从仓库副本装到用户级 skill 根；`-VerifyOnly` 校验分叉 |
+| `assets/eval_results.py` | 缁撴灉钀界洏锛堝垎鐗?+ `kind` 瀛楁锛岄槻骞跺彂瑕嗙洊锛?|
+| `assets/eval_baseline.py` | 鍩虹嚎瀵规瘮锛氭寜缁濆鏉℃暟鍒ら€€鍖栵紱offline / **live-strict** / live 涓夋。涓ユ牸搴︼紱鍒嗘瘝鍙樺寲涓嶅垽瀹?|
+| `assets/eval_online.py` | 鍦ㄧ嚎璇勬祴楠ㄦ灦锛歚tool` / `inject` / `answer` 涓夊浠讹紝鍐呯疆浜旀潯闃茶鎶ョ邯寰?|
+| `assets/selftest.py` | 鍒ゆ嵁涓庡垎姣嶇邯寰嬬殑鍥炲綊鑷锛堟敼浠讳綍鑴氭湰鍚庡繀璺戯級 |
+| `assets/mutation_check.py` | 鍙樺紓娴嬭瘯锛氭妸瀹炵幇鏀瑰潖锛岄獙璇佹柇瑷€浼氱炕绾紱鍦ㄤ复鏃跺壇鏈笂鏂藉姞鍙樺紓 |
+| `assets/EvalResults.java` | JUnit 鍦烘櫙鐨勭粨鏋滆惤鐩橈紝JSON 褰㈢姸涓?Python 鐗堜竴鑷?|
+| `assets/datasets/*.example.jsonl` | 鏁版嵁闆嗘牱渚嬶紙鎹㈤」鐩繀椤绘暣浣撴浛鎹級 |
+| `assets/install.ps1` | 鎶?bundle 浠庝粨搴撳壇鏈鍒扮敤鎴风骇 skill 鏍癸紱`-VerifyOnly` 鏍￠獙鍒嗗弶 |
 
-## 五条防误报纪律（`eval_online.py` 固化为可运行代码）
-
+## 浜旀潯闃茶鎶ョ邯寰嬶紙`eval_online.py` 鍥哄寲涓哄彲杩愯浠ｇ爜锛?
 ```python
-# ① 工具是否被调用 → 查审计日志，不看回答措辞
+# 鈶?宸ュ叿鏄惁琚皟鐢?鈫?鏌ュ璁℃棩蹇楋紝涓嶇湅鍥炵瓟鎺緸
 called = tool_calls_of(conversation_id)
 
-# ② 降级跳过：负向断言在空回答上恒真，不能算 PASS
+# 鈶?闄嶇骇璺宠繃锛氳礋鍚戞柇瑷€鍦ㄧ┖鍥炵瓟涓婃亽鐪燂紝涓嶈兘绠?PASS
 if is_degraded(text, cost):
     continue
 
-# ③ PII 判"未打码"，不判宽禁词
+# 鈶?PII 鍒?鏈墦鐮?锛屼笉鍒ゅ绂佽瘝
 UNMASKED_PHONE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 
-# ④ 观测不到 → None，不进分母也不判失败
-called = tool_calls_of(cid)                   # 列表 / 空列表 / None
+# 鈶?瑙傛祴涓嶅埌 鈫?None锛屼笉杩涘垎姣嶄篃涓嶅垽澶辫触
+called = tool_calls_of(cid)                   # 鍒楄〃 / 绌哄垪琛?/ None
 if called is None and needs_tool:
     unobservable += 1
     continue
 
-# ⑤ 401/402 基础设施异常单独计 errors：不因重试恢复，退出码升 2
+# 鈶?401/402 鍩虹璁炬柦寮傚父鍗曠嫭璁?errors锛氫笉鍥犻噸璇曟仮澶嶏紝閫€鍑虹爜鍗?2
 except urllib.error.HTTPError as exc:
     if exc.code in (401, 402):
         errors += 1
 ```
 
-## 严格度三档
-
-| kind | 默认容忍波动 | 理由 |
+## 涓ユ牸搴︿笁妗?
+| kind | 榛樿瀹瑰繊娉㈠姩 | 鐞嗙敱 |
 |---|---|---|
-| `offline` | 0 条 | 纯函数无随机性，掉 1 条就是真掉了 |
-| `live-strict` | 0 条 | 安全/编造类门禁（提示词泄漏、PII、越权）：随机性解释能力波动，解释不了泄漏 |
-| `live` | 1 条 | 普通能力类；波动必须留痕 |
+| `offline` | 0 鏉?| 绾嚱鏁版棤闅忔満鎬э紝鎺?1 鏉″氨鏄湡鎺変簡 |
+| `live-strict` | 0 鏉?| 瀹夊叏/缂栭€犵被闂ㄧ锛堟彁绀鸿瘝娉勬紡銆丳II銆佽秺鏉冿級锛氶殢鏈烘€цВ閲婅兘鍔涙尝鍔紝瑙ｉ噴涓嶄簡娉勬紡 |
+| `live` | 1 鏉?| 鏅€氳兘鍔涚被锛涙尝鍔ㄥ繀椤荤暀鐥?|
 
-## 本地验证
+## 鏈湴楠岃瘉
 
 ```sh
-npm test                                   # bundle 结构冒烟（node:test）
-python skills/ai-eval-harness/assets/selftest.py          # 判据自检
-python skills/ai-eval-harness/assets/mutation_check.py    # 变异测试
+npm test                                   # bundle 缁撴瀯鍐掔儫锛坣ode:test锛?python skills/ai-eval-harness/assets/selftest.py          # 鍒ゆ嵁鑷
+python skills/ai-eval-harness/assets/mutation_check.py    # 鍙樺紓娴嬭瘯
 ```
 
-三项在本仓库发布前均验证通过（96 条断言全过、24 个变异全部 caught）。
+涓夐」鍦ㄦ湰浠撳簱鍙戝竷鍓嶅潎楠岃瘉閫氳繃锛?6 鏉℃柇瑷€鍏ㄨ繃銆?4 涓彉寮傚叏閮?caught锛夈€?
+## 閫€鍑虹爜绾﹀畾
 
-## 退出码约定
-
-| 码 | 含义 |
+| 鐮?| 鍚箟 |
 |---|---|
-| 0 | 通过 |
-| 1 | 质量失败（真实退化、真实泄漏） |
-| 2 | 结果不可用（路径错、数据集缺、全降级、观测不到、分母变化、401/402）——先修 harness，别当退化 |
+| 0 | 閫氳繃 |
+| 1 | 璐ㄩ噺澶辫触锛堢湡瀹為€€鍖栥€佺湡瀹炴硠婕忥級 |
+| 2 | 缁撴灉涓嶅彲鐢紙璺緞閿欍€佹暟鎹泦缂恒€佸叏闄嶇骇銆佽娴嬩笉鍒般€佸垎姣嶅彉鍖栥€?01/402锛夆€斺€斿厛淇?harness锛屽埆褰撻€€鍖?|
 
-## 已知边界
+## 宸茬煡杈圭晫
 
-- `eval_online.py` 是**骨架**：`login()` / `chat()` / `tool_calls_of()` 需按你的项目契约改写；数据集样例来自摄影订单项目，换项目必须整体替换。
-- 判定逻辑的回归自检 monkeypatch 模块级函数，验证的是判定纪律，不是真实网络路径。
-- `EvalResults.java` 与 `install.ps1` 未在 CI 中自动验证；接入时请先跑一次冒烟。
-
+- `eval_online.py` 鏄?*楠ㄦ灦**锛歚login()` / `chat()` / `tool_calls_of()` 闇€鎸変綘鐨勯」鐩绾︽敼鍐欙紱鏁版嵁闆嗘牱渚嬫潵鑷憚褰辫鍗曢」鐩紝鎹㈤」鐩繀椤绘暣浣撴浛鎹€?- 鍒ゅ畾閫昏緫鐨勫洖褰掕嚜妫€ monkeypatch 妯″潡绾у嚱鏁帮紝楠岃瘉鐨勬槸鍒ゅ畾绾緥锛屼笉鏄湡瀹炵綉缁滆矾寰勩€?- `EvalResults.java` 涓?`install.ps1` 鏈湪 CI 涓嚜鍔ㄩ獙璇侊紱鎺ュ叆鏃惰鍏堣窇涓€娆″啋鐑熴€?
 ## License
 
 [MIT](LICENSE)

@@ -1,4 +1,4 @@
-# dsh-eval-harness
+﻿# dsh-eval-harness
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
@@ -15,7 +15,7 @@ An **agent application development evaluation toolkit** for DeepSeek Harness (DS
 | proving a RAG / tool / prompt change did not regress | compare case-by-case against the baseline; any drop goes red, safety regressions have zero tolerance |
 | evals are green but users still hit failures | walk the four-trap catalog and the root-cause layers to find the false green |
 | suspecting your eval script lies to itself | run `mutation_check.py`: break the implementation, see whether the assertions dare to go red |
-| numbers "look right" but you cannot trust them | five-state result contract, denominator discipline, small-n annotations — every number explains itself |
+| numbers "look right" but you cannot trust them | five-state result contract, denominator discipline, small-n annotations 鈥?every number explains itself |
 
 ## Install
 
@@ -23,18 +23,18 @@ An **agent application development evaluation toolkit** for DeepSeek Harness (DS
 dsh plugin add https://github.com/LTJ002/dsh-eval-harness
 ```
 
-The skill registers as a bundled provider on `ctx.skills` (rank 600) — no need to copy anything into a project's `.agents/skills`.
+The skill registers as a bundled provider on `ctx.skills` (rank 600) 鈥?no need to copy anything into a project's `.agents/skills`.
 
 ## What it is / is not
 
-This is a **skill pack**: `skills/ai-eval-harness/SKILL.md` is the methodology the model reads (criterion design, trap catalog, baseline discipline), and `skills/ai-eval-harness/assets/` contains ready-to-run evaluation implementations (Python standard library; a Java writer for JUnit result shards). It ships no UI and no session commands — everything lives in the skill body and the asset scripts.
+This is a **skill pack**: `skills/ai-eval-harness/SKILL.md` is the methodology the model reads (criterion design, trap catalog, baseline discipline), and `skills/ai-eval-harness/assets/` contains ready-to-run evaluation implementations (Python standard library; a Java writer for JUnit result shards). It ships no UI and no session commands 鈥?everything lives in the skill body and the asset scripts.
 
 ## Scope: works with every agent development framework
 
-The toolkit is **framework-agnostic**: it binds to, embeds, and requires no agent framework SDK. Agent applications built with any framework — LangChain, LangChain4j, Spring AI, AutoGen, CrewAI, Dify, and others — can be evaluated by the same suite given two prerequisites:
+The toolkit is **framework-agnostic**: it binds to, embeds, and requires no agent framework SDK. Agent applications built with any framework 鈥?LangChain, LangChain4j, Spring AI, AutoGen, CrewAI, Dify, and others 鈥?can be evaluated by the same suite given two prerequisites:
 
-1. **Programmable chat access** — the app exposes a callable chat endpoint (HTTP/SSE both fine; `eval_online.py` talks to it with the Python standard library, rewrite `login()` / `chat()` for your contract);
-2. **Queryable side effects** — tool calls and writes leave queryable records (audit table, structured logs, or DB) — criteria read external facts, never the model's self-report.
+1. **Programmable chat access** 鈥?the app exposes a callable chat endpoint (HTTP/SSE both fine; `eval_online.py` talks to it with the Python standard library, rewrite `login()` / `chat()` for your contract);
+2. **Queryable side effects** 鈥?tool calls and writes leave queryable records (audit table, structured logs, or DB) 鈥?criteria read external facts, never the model's self-report.
 
 Because the prerequisites are decoupled from the framework, the methodology (bidirectional criteria, denominator discipline, baseline diff, mutation testing) transfers across frameworks; switching frameworks changes the adapter, not the criteria. The evaluator integration layer follows your project language:
 
@@ -42,14 +42,14 @@ Because the prerequisites are decoupled from the framework, the methodology (bid
 - **Java/JUnit projects**: `EvalResults.java` produces JSON shards shaped identically to the Python ones;
 - **Any other language**: anything that can write result shards in the agreed JSON shape feeds `eval_baseline.py` (shape documented in [assets/README.md](skills/ai-eval-harness/assets/README.md)).
 
-LangChain / LangChain4j appear in the docs only as examples when explaining chunker size units — **this is not an integration statement for any specific framework**.
+LangChain / LangChain4j appear in the docs only as examples when explaining chunker size units 鈥?**this is not an integration statement for any specific framework**.
 
 ## Assets
 
 | File | Purpose |
 |---|---|
 | `assets/eval_results.py` | Result shards (per-suite files + `kind` field, concurrency-safe) |
-| `assets/eval_baseline.py` | Baseline diff: regression by absolute counts; offline / **live-strict** / live strictness tiers; denominator change ⇒ undecided |
+| `assets/eval_baseline.py` | Baseline diff: regression by absolute counts; offline / **live-strict** / live strictness tiers; denominator change 鈬?undecided |
 | `assets/eval_online.py` | Online suite skeleton: `tool` / `inject` / `answer`, with five anti-false-signal disciplines built in |
 | `assets/selftest.py` | Regression self-test for the denominator/criteria discipline (run after touching any script) |
 | `assets/mutation_check.py` | Mutation testing: break the implementation, assert the tests go red; mutations applied to a temp copy |
@@ -98,7 +98,7 @@ python skills/ai-eval-harness/assets/selftest.py
 python skills/ai-eval-harness/assets/mutation_check.py
 ```
 
-All three were green before release (96 assertions passed; 24/24 mutations caught).
+All three were green before release (all assertions pass; 24/24 mutations caught — the assertion count evolves with the skill, run it locally for the current number).
 
 ## Exit codes
 
@@ -106,7 +106,7 @@ All three were green before release (96 assertions passed; 24/24 mutations caugh
 |---|---|
 | 0 | pass |
 | 1 | quality failure (real regression, real leak) |
-| 2 | results unusable (bad path, missing dataset, all degraded, unobservable, denominator change, 401/402) — fix the harness first |
+| 2 | results unusable (bad path, missing dataset, all degraded, unobservable, denominator change, 401/402) 鈥?fix the harness first |
 
 ## Known limits
 
