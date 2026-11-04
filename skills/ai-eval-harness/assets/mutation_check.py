@@ -233,7 +233,7 @@ MUTATIONS = [
     (
         "RAG recall 分母换成返回条数",
         "eval_rag.py",
-        "    return len(hits) / len(expected)",
+        "    return len(hits) / len(wanted)",
         "    return len(hits) / max(len(retrieved), 1)",
         "漏检 recall=0.5",
     ),
@@ -250,6 +250,27 @@ MUTATIONS = [
         '        return hashlib.sha256(fh.read()).hexdigest()',
         '        return "0" * 64',
         "sha256 与文件内容一致",
+    ),
+    (
+        "manifest 只扫一层目录",
+        "eval_manifest.py",
+        "    for dirpath, dirnames, filenames in os.walk(root):",
+        "    for dirpath, dirnames, filenames in [(root, [], os.listdir(root))]:",
+        "递归指纹到子目录提示词",
+    ),
+    (
+        "runId 退回秒级时间戳",
+        "eval_manifest.py",
+        '        "runId": f"eval-{stamp}-{secrets.token_hex(2)}",',
+        '        "runId": f"eval-{stamp}",',
+        "同秒两次 runId 不同",
+    ),
+    (
+        "recall 分母不去重",
+        "eval_rag.py",
+        "    return len(hits) / len(wanted)",
+        "    return len(hits) / len(expected)",
+        "expected 重复仍能完全命中",
     ),
 ]
 
