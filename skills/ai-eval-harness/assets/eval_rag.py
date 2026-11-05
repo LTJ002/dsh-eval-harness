@@ -109,8 +109,8 @@ def load_cases(path: str) -> list[dict]:
     with open(path, encoding="utf-8-sig") as fh:
         for line in fh:
             line = line.strip()
-            if not line:
-                continue
+            if not line or line.startswith("#"):
+                continue  # 注释行：样例常带说明，不该被当成坏 JSON
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError:

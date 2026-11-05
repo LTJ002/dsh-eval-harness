@@ -363,6 +363,67 @@ MUTATIONS = [
         'STRICT_SUITES = {"inject"}',
         "multi-turn 落 live-strict",
     ),
+    # ---- RAG 生成层 / 治理三件套（本轮新增能力）----
+    (
+        "Faithfulness 不再查无依据数字",
+        "eval_rag_answer.py",
+        "        if n not in haystack:\n"
+        '            bad.append(f"无依据数字 {n}（支撑句里找不到）")',
+        "        if False:\n"
+        '            bad.append(f"无依据数字 {n}（支撑句里找不到）")',
+        "无依据数字（幻觉）→ 判失败",
+    ),
+    (
+        "引用无支撑数据时默认通过",
+        "eval_rag_answer.py",
+        '        return ["声明了引用但无 supporting_docs，无法核对（不默认通过）"]',
+        "        return []",
+        "声明引用但无支撑数据 → 不默认通过",
+    ),
+    (
+        "完整性不再查遗漏要点",
+        "eval_rag_answer.py",
+        '    return [f"遗漏要点 {p!r}" for p in required_points if str(p) not in answer]',
+        "    return []",
+        "遗漏必答要点 → 判失败",
+    ),
+    (
+        "矛盾形态不再拦",
+        "eval_rag_answer.py",
+        '    return [f"命中矛盾形态 {c!r}" for c in contradictions if str(c) in answer]',
+        "    return []",
+        "命中矛盾形态（极性答反）→ 判失败",
+    ),
+    (
+        "根因判不了时硬塞类别",
+        "eval_governance.py",
+        '    return "unclassified"',
+        '    return "模型问题"',
+        "判不了 → unclassified 不猜",
+    ),
+    (
+        "数据集不查重复 id",
+        "eval_governance.py",
+        '            bad.append(f"重复 id：{cid}（改语义应换新 id，不复用）")',
+        "            pass",
+        "重复 id → 违规",
+    ),
+    (
+        "冻结集改动不再拦",
+        "eval_governance.py",
+        '            bad.append("冻结集内容被改动（frozen 只读，改需换版本号并写明原因）")',
+        "            pass",
+        "冻结集被改 → 违规",
+    ),
+    (
+        "Judge 低一致率仍放行",
+        "eval_governance.py",
+        '    if rate < min_agreement:\n'
+        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")',
+        "    if False:\n"
+        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")',
+        "一致率 0 → 禁止进门禁",
+    ),
 ]
 
 

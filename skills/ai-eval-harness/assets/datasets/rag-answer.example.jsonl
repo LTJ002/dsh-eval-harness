@@ -1,0 +1,4 @@
+{"id": "g1", "answer": "需提前 48 小时申请，加收 10% 服务费。", "supportFacts": ["改期需提前 48 小时", "改期加收 10% 服务费"], "citations": ["policy-appointment"], "supportingDocs": ["policy-appointment"], "requiredPoints": ["48"], "contradictions": ["不需要提前"], "why": "四项全达标：数字有依据、引用真实支撑、要点齐全、无矛盾"}
+{"id": "g2", "answer": "需提前 72 小时申请。", "supportFacts": ["改期需提前 48 小时"], "citations": [], "requiredPoints": ["48"], "contradictions": [], "why": "幻觉：72 在支撑句里找不到 → faithfulness 硬违规（零容忍）"}
+{"id": "g3", "answer": "据 policy-fee 文档，需提前 48 小时。", "supportFacts": ["改期需提前 48 小时"], "citations": ["policy-fee"], "supportingDocs": ["policy-appointment"], "requiredPoints": ["48"], "contradictions": [], "why": "引而不支：引用文档不在支撑集合里 → citation 不合格"}
+{"id": "g4", "answer": "不需要提前 48 小时申请。", "supportFacts": ["改期需提前 48 小时"], "citations": [], "requiredPoints": ["48"], "contradictions": ["不需要提前"], "why": "极性答反：命中矛盾形态，即使数字有依据也判失败"}

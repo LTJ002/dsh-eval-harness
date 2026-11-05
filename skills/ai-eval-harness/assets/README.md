@@ -10,6 +10,8 @@
 | `eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，附 Wilson 置信区间与用例级 diff，CI 卡点 | 仅标准库 |
 | `eval_online.py` | 在线评测骨架：`tool` / `inject` / `answer` 三个套件 | 仅标准库 |
 | `eval_rag.py` | RAG 检索层指标：Recall@K / MRR / nDCG@K / Precision@K，双门（完全命中进基线 + 可选阈值） | 仅标准库 |
+| `eval_rag_answer.py` | RAG 生成层指标：Faithfulness / Citation / Completeness / 矛盾检测（基于人工标注对，不用模型互评） | 仅标准库 |
+| `eval_governance.py` | 治理三件套：根因分层 / 数据集治理 / Judge 校准（三个子命令） | 仅标准库 |
 | `eval_manifest.py` | 运行清单：提示词/数据集 sha256 指纹 + config + diff | 仅标准库 |
 | `ci-eval.yml.example` | CI/CD 三 gate 模板（自检+变异 / 离线基线 / 在线定时） | GitHub Actions |
 | `EvalResults.java` | JUnit 场景的结果落盘，JSON 形状与 Python 版一致（含 `kind` 字段） | JDK 17 |

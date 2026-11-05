@@ -421,7 +421,13 @@ def load(name: str) -> list[dict]:
             f"请先从 skill 的 assets/datasets/ 复制 example 文件，按项目改写后再跑。")
     # utf-8-sig：兼容 PowerShell 生成数据集时带的 BOM 头；无 BOM 文件零影响
     with open(path, encoding="utf-8-sig") as fh:
-        return [json.loads(line) for line in fh if line.strip()]
+        out = []
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue  # 注释行
+            out.append(json.loads(line))
+        return out
 
 
 def run_tool_suite(token: str, user_id: str) -> dict:

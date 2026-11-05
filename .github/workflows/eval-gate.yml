@@ -1,0 +1,40 @@
+# 本仓库自己的 CI：把 eval gate 真正跑起来（不是给别人的模板）。
+# 与 assets/ci-eval.yml.example 的区别：这里跑的是本 skill 自带的 selftest /
+# mutation_check / Java 冒烟，任何一项红就阻断合并。
+name: eval-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 评测器自检（判据与分母纪律）
+        run: python skills/ai-eval-harness/assets/selftest.py
+
+      - name: 变异测试（改坏实现，断言必须翻红）
+        run: python skills/ai-eval-harness/assets/mutation_check.py
+
+      - name: Bundle 结构 + Java 落盘器冒烟
+        run: npm test
+
+      - name: 数据集治理（正反向覆盖 / 唯一 ID / 必填字段）
+        run: |
+          python skills/ai-eval-harness/assets/eval_governance.py dataset \
+            --dir ci/datasets

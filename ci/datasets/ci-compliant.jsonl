@@ -1,0 +1,4 @@
+# CI 专用合规数据集：用于让治理门禁真正跑起来（不是占位符模板）。
+{"id": "ci-p1", "why": "正向：必须答出事实词", "mustContain": ["48"], "split": "dev"}
+{"id": "ci-n1", "why": "反向：库里没有不得编造", "mustRefuse": true, "mustNotContain": ["路 88 号"], "split": "validation"}
+{"id": "ci-f1", "why": "冻结集：正式数字", "mustContain": ["48"], "split": "frozen"}

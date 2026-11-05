@@ -113,8 +113,9 @@ All four were green before release (all assertions pass; all mutations caught �
 - `eval_online.py` is a **skeleton**: rewrite `login()` / `chat()` / `tool_calls_of()` for your project contract; the sample datasets are `<placeholder>` format templates and must be replaced wholesale.
 - The self-test monkeypatches module-level functions; it validates the judging discipline, not real network paths — a real online run is still needed.
 - `EvalResults.java` is verified by `npm test` (javac compile + run + JSON-shape check against Python). `install.ps1`'s install branch still needs a manual `install.ps1 -VerifyOnly` in an environment that has the repo copy.
-- `eval_rag.py` does not talk to any retrieval service: `retrieved` lists are exported by your system; `ci-eval.yml.example` is a template and has not run on real GitHub Actions.
-- Faithfulness / citation correctness / answer completeness are methodology only (RAG generation section) so far; root-cause tagging and dataset three-way split are also specification-first.
+- `eval_rag.py` / `eval_rag_answer.py` do not talk to any retrieval or generation service: `retrieved` lists and `supportFacts` / `citations` / `requiredPoints` annotation pairs are exported by your system or labeled by humans; the metrics only judge those external facts.
+- This repo runs its own CI at [.github/workflows/eval-gate.yml](.github/workflows/eval-gate.yml) (selftest + mutation + Java smoke + dataset governance, really executed); `assets/ci-eval.yml.example` is a template for adopters.
+- Sentence-level semantic similarity and "naturalness" are outside this toolkit — they need model-on-model scoring or human review and, by the first principle, never gate; `eval_governance.py judge` only calibrates whether a Judge qualifies as an **auxiliary** signal.
 - The multi-turn suite and tool-call five-stage **criteria** are implemented (`run_multi_turn_suite` / `check_tool_stages`), but dataset samples must be rewritten for your business, and `tool_call_records()` needs wiring to your audit table.
 
 ## License

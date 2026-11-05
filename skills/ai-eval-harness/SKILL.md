@@ -137,6 +137,11 @@ RAG 等于白做。这不是模型的错，是提示词与知识库互相矛盾�
 规则：**一二级能判定的事，不许降级到三级**（能用 `mustContain` 查事实词的就别让 Judge 打分）；
 三级永远不单独决定安全门禁，Judge 分数必须有人工标注集校准背书。
 
+**校准实现**：`eval_governance.py judge` 从人工标注对（human / judge 标签）算一致率
+与 kappa，样本数不足（默认 < 20）或一致率低于阈值（默认 0.8）时 `gate=false`
+——**直接禁止 Judge 进门禁**，并给出具体原因。这把"必须有人工标注集背书"
+从一句原则变成可执行检查，selftest [17] 有断言钉着。
+
 ## 交付前必经：负向对照（变异测试）
 
 **绿门禁不证明任何东西，红才证明它在岗。**
@@ -526,6 +531,18 @@ if tested == 0:
 需要按句标注，成本高，可以只对关键用例做。端到端指标继续用双向判据（上文 answer 套件），
 但它解释不了"哪一层坏了"——分层指标才定位得到层。
 
+**生成层实现**：`eval_rag_answer.py` 有可执行指标，且**不调用任何模型打分**——
+判定依据全部来自人工标注对（外部事实）：`supportFacts`（支撑句）、`citations` /
+`supportingDocs`（引用出处）、`requiredPoints`（必答要点）、`contradictions`（矛盾形态）。
+四项纯函数：`check_faithfulness`（答案里的数字能否在支撑句找到，找不到=幻觉）、
+`check_citations`（引用是否真的在支撑文档集合里，无数据可核对时**不默认通过**）、
+`check_completeness`（要点逐项点名）、`check_contradictions`（极性答反/符号错）。
+无依据数字与矛盾形态是**硬违规零容忍**，阈值门之外另算；失败轮次不落盘。
+样例见 `rag-answer.example.jsonl`，selftest [16] 与变异测试都有覆盖。
+
+限界说清楚：整句语义相似度、答案是否"自然"这类判断留给三级（人工/校准 Judge），
+本脚本只做能由人工标注对确定性判定的部分——不用模型互评，是第一原则的硬要求。
+
 ## 运行指纹与可复现
 
 改了提示词必须能追溯。做法：对每个 `.md` 算 sha256 存进 `eval/prompts-manifest.json`，测试比对不一致就红。
@@ -627,6 +644,11 @@ selftest [15] 与变异测试都有覆盖。**审计日志按会话而非按轮�
   防的是"反复对着同一个测试集加特例"，不是禁止迭代——冻结集只读，
   改冻结集必须换版本号并在 note 里写明原因。
 
+**实现**：`eval_governance.py dataset` 校验唯一 ID、必填字段（`why`）、正反向覆盖、
+`split` 合法性（dev/validation/frozen）、以及冻结集哈希（改了就红，不靠自觉）。
+CI 用 `ci/datasets/ci-compliant.jsonl` 跑真门禁。selftest [17] 与变异测试都有覆盖。
+版本号与变更记录仍是人工纪律（脚本不替你写 note）。
+
 ## 失败根因分层：红了一眼定位到层
 
 评测红只说明"有问题"，根因分类让下一次行动直接跳到对应层：
@@ -646,6 +668,11 @@ selftest [15] 与变异测试都有覆盖。**审计日志按会话而非按轮�
 判不了的留给人工复核时标）。统计每个层的失败数变化，比只看总通过率更能说明
 "这次改动动了哪一层"。评测自身的问题（判据错、期望错）也要入表——
 它和产品问题混在一起时，人们默认先查产品，评测器的错就被漏掉了。
+
+**实现**：`eval_governance.py rootcause` 按关键词规则把失败明细归到八类，
+`summarize_root_causes()` 出各层计数。**判不了就返回 `unclassified`，
+不硬塞一个类别**——猜错类别比不分类更误导。规则是起点，接真实项目时
+按你们的日志措辞扩充关键词表即可。selftest [17] 有断言钉着。
 
 ## 常见假红与假绿
 
@@ -673,12 +700,16 @@ scripts/ 或 assets/
   eval_baseline.py     # 基线对比
   eval_online.py       # 在线评测
   eval_rag.py          # RAG 检索层指标（Recall@K / MRR / nDCG@K / Precision@K）
+  eval_rag_answer.py   # RAG 生成层指标（Faithfulness/引用/完整性/矛盾，基于人工标注对）
+  eval_governance.py   # 根因分层 / 数据集治理 / Judge 校准（三个子命令）
   eval_manifest.py     # 运行清单：提示词/数据集指纹 + config，回答"为什么和上次不一样"
-  ci-eval.yml.example  # CI/CD 三 gate 模板（自检+变异 / 离线基线 / 在线定时）
+  ci-eval.yml.example  # 给接入方的 CI/CD 模板（本仓库自身用 .github/workflows/eval-gate.yml）
   selftest.py          # 判据与分母纪律的回归测试
   mutation_check.py    # 负向对照：把实现改坏，验证断言会翻红
   EvalResults.java     # JUnit 侧落盘（形状与 Python 一致）
 <module>/eval-results/ # 运行时结果（.gitignore，只留 README）
+.github/workflows/eval-gate.yml  # 本仓库自己的 CI（真实执行，非模板）
+ci/datasets/ci-compliant.jsonl   # CI 治理门禁用的合规数据集
 ```
 
 `selftest.py` 与 `mutation_check.py` 是**门禁的一部分**，不是可选工具：
@@ -706,6 +737,8 @@ python eval_baseline.py --results eval-results --baseline eval/baseline.json
 | `assets/eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，分母变化不判定 |
 | `assets/eval_online.py` | 在线评测骨架，四套件（`tool` / `inject` / `answer` / `multi-turn`），**已内置五条防误报的正确写法** + `expected` 结构化判据 + 工具五阶段 |
 | `assets/eval_rag.py` | **RAG 检索层指标**：Recall@K / MRR / nDCG@K / Precision@K，纯函数可断言；双门（完全命中进 offline 基线零容忍 + 可选套件阈值） |
+| `assets/eval_rag_answer.py` | **RAG 生成层指标**：Faithfulness / Citation Correctness / Answer Completeness / 矛盾检测，判定依据来自人工标注对（不用模型互评），无依据与矛盾零容忍 |
+| `assets/eval_governance.py` | **治理三件套**：根因分层 / 数据集治理（唯一 ID、正反向、三集隔离、冻结哈希）/ Judge 校准（一致率+kappa 不达标禁止进门禁） |
 | `assets/eval_manifest.py` | **运行清单**：提示词与数据集 sha256 指纹 + config + `manifest_diff()`，回答"这次和上次为什么不一样" |
 | `assets/ci-eval.yml.example` | **CI/CD 三 gate 模板**：评测器自检+变异 / 离线基线（退出码 1、2 都阻断）/ 在线定时 |
 | `assets/EvalResults.java` | JUnit 场景用，产出的 JSON 形状与 Python 版一致 |

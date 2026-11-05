@@ -23,6 +23,8 @@ import eval_online as O
 import eval_results as R
 import eval_rag as RG
 import eval_manifest as M
+import eval_rag_answer as RA
+import eval_governance as G
 
 FAILED = []
 
@@ -810,6 +812,80 @@ O.DATASET_DIR, O.new_session, O.chat = old_ds_mt, old_ns2, old_chat2
 for f in mt.glob("*"):
     f.unlink()
 mt.rmdir()
+
+
+# ---------- RAG 生成层：判定依据必须是人工标注对（不用模型互评） ----------
+print("\n[16] RAG 生成层（Faithfulness/Citation/Completeness/Contradiction）")
+CA = RA.check_answer
+check("四项全达标 → 通过", CA({"id": "x", "answer": "需提前 48 小时，加收 10%。",
+                             "supportFacts": ["提前 48 小时", "加收 10%"],
+                             "citations": ["policy-appointment"],
+                             "supportingDocs": ["policy-appointment"],
+                             "requiredPoints": ["48"], "contradictions": []}) == [])
+check("无依据数字（幻觉）→ 判失败",
+      any("无依据数字" in b for b in CA({"answer": "需提前 72 小时",
+                                        "supportFacts": ["提前 48 小时"]})))
+check("引而不支 → 判失败",
+      any("引用不支撑" in b for b in CA({"answer": "据 doc-x，提前 48 小时",
+                                        "citations": ["doc-x"],
+                                        "supportingDocs": ["policy-appointment"]})))
+check("声明引用但无支撑数据 → 不默认通过",
+      any("无法核对" in b for b in CA({"answer": "提前 48 小时", "citations": ["doc-x"]})))
+check("遗漏必答要点 → 判失败",
+      any("遗漏要点" in b for b in CA({"answer": "请联系客服",
+                                      "requiredPoints": ["48"]})))
+check("命中矛盾形态（极性答反）→ 判失败",
+      any("矛盾形态" in b for b in CA({"answer": "不需要提前 48 小时",
+                                       "contradictions": ["不需要提前"]})))
+check("数字千分位归一化后溯源",
+      RA.check_faithfulness("金额 1,000 元", ["金额 1000 元"]) == [])
+check("未要求引用时不误判", RA.check_citations("提前 48 小时", [], None) == [])
+
+
+# ---------- 治理三件套：根因 / 数据集 / Judge 校准 ----------
+print("\n[17] 治理（根因分层 / 数据集 / Judge 校准）")
+check("超时 → 基础设施问题",
+      G.classify_root_cause("接口超时") == "基础设施问题")
+check("判据 → 评测问题",
+      G.classify_root_cause("mustContain 判据过宽导致误报") == "评测问题")
+check("未召回 → 检索问题",
+      G.classify_root_cause("相关文档未召回") == "检索问题")
+check("判不了 → unclassified 不猜",
+      G.classify_root_cause("某个完全陌生的现象") == "unclassified")
+check("根因统计分层计数",
+      G.summarize_root_causes(["接口超时", "知识库内容过期"])["by_cause"]
+      == {"基础设施问题": 1, "数据问题": 1})
+
+good_ds = [
+    {"id": "p1", "why": "正向", "mustContain": ["48"]},
+    {"id": "n1", "why": "反向", "mustRefuse": True},
+]
+check("合规数据集 → 无违规", G.validate_dataset(good_ds) == [])
+check("重复 id → 违规", any("重复 id" in b for b in G.validate_dataset(
+    [{"id": "p1", "why": "x"}, {"id": "p1", "why": "y"}])))
+check("缺 why → 违规", any("缺必填字段" in b for b in G.validate_dataset(
+    [{"id": "p1", "mustContain": ["48"]}])))
+check("无反向用例 → 违规", any("没有反向用例" in b for b in G.validate_dataset(
+    [{"id": "p1", "why": "x", "mustContain": ["48"]}])))
+check("非法 split → 违规", any("split" in b for b in G.validate_dataset(
+    good_ds + [{"id": "p2", "why": "x", "split": "production"}])))
+import hashlib
+frozen = hashlib.sha256(json.dumps(good_ds, ensure_ascii=False,
+                                   sort_keys=True).encode("utf-8")).hexdigest()
+check("冻结集未改 → 通过",
+      G.validate_dataset(good_ds, frozen_hash=frozen) == [])
+check("冻结集被改 → 违规", any("冻结集" in b for b in G.validate_dataset(
+    good_ds + [{"id": "p3", "why": "x", "mustRefuse": True}], frozen_hash=frozen)))
+
+# Judge 校准：小样本/低一致率必须禁止进门禁
+labels_ok = [{"human": "pass", "judge": "pass"} for _ in range(20)]
+check("一致率 1.0 + 足量样本 → 放行", G.judge_agreement(labels_ok)["gate"] is True)
+labels_bad = [{"human": "pass", "judge": "fail"} for _ in range(20)]
+check("一致率 0 → 禁止进门禁", G.judge_agreement(labels_bad)["gate"] is False)
+check("样本不足 → 禁止进门禁",
+      G.judge_agreement(labels_ok[:3])["gate"] is False)
+check("低一致率给出具体原因",
+      any("一致率" in r for r in G.judge_agreement(labels_bad)["reasons"]))
 
 
 for f in t2.glob("*"):
