@@ -25,6 +25,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # smoke.test.mjs 依赖 yaml 包；不装依赖时本地（已有 node_modules）全绿、
+      # 全新 CI 环境会 ERR_MODULE_NOT_FOUND——真实跑过一次才暴露。
+      - name: 安装 Node 依赖
+        run: npm ci
+
       - name: 评测器自检（判据与分母纪律）
         run: python skills/ai-eval-harness/assets/selftest.py
 
