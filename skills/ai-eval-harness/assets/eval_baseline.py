@@ -108,6 +108,9 @@ def _coerce(entry: dict, source: str) -> dict | None:
             "total": int(total),
             "kind": _infer_kind(entry, source),
             "failures": [str(f) for f in (entry.get("failures") or [])],
+            # 显式 caseIds（可选）：不依赖失败明细文本格式，供用例级 diff 用
+            "caseIds": ([str(x) for x in entry["caseIds"]]
+                        if isinstance(entry.get("caseIds"), list) else None),
         }
     except (TypeError, ValueError):
         return None
@@ -253,13 +256,19 @@ def wilson_interval(passed: int, total: int, z: float = 1.96) -> tuple[float, fl
     return (max(0.0, center - half), min(1.0, center + half))
 
 
-def case_ids(failures: list[str]) -> set[str]:
+def case_ids(failures: list[str], explicit_ids: list[str] | None = None) -> set[str]:
     """从失败明细里抠出用例 ID，供用例级 diff 使用。
 
-    约定：失败明细以 case id 开头（如 "a1 该答未答…"、"g34 未挂门禁"）。
-    取首段 [A-Za-z0-9_.-]+ 作为 id；抽不出 id 的条目跳过，绝不猜——
-    猜错 id 会把"新增失败"报成"修复了"，比不做 diff 更糟。
+    两种来源，显式优先：
+    - explicit_ids：结果/基线里直接给的 `caseIds` 字段（推荐，不依赖文本格式）；
+      **空列表视为"未提供"**，回退到文本抠 id——否则结果文件里写
+      `"caseIds": []` 这种合法但空的形态，会把"新增失败/已修复"全部静默吞掉。
+    - 否则约定失败明细以 case id 开头（"a1 该答未答…"），取首段
+      [A-Za-z0-9_.-]+；抽不出的条目跳过，绝不猜——猜错 id 会把"新增失败"
+      报成"修复了"，比不做 diff 更糟。
     """
+    if explicit_ids:  # 非空才算显式提供；[] 与 None 都回退
+        return {str(x) for x in explicit_ids if str(x).strip()}
     out: set[str] = set()
     for f in failures or []:
         m = re.match(r"^([A-Za-z0-9_.-]+)(?:\s|$)", str(f).strip())
@@ -268,14 +277,37 @@ def case_ids(failures: list[str]) -> set[str]:
     return out
 
 
-def case_diff(base_failures: list[str], cur_failures: list[str]) -> tuple[list[str], list[str]]:
+def case_diff(base_failures: list[str], cur_failures: list[str],
+              base_ids: list[str] | None = None,
+              cur_ids: list[str] | None = None) -> tuple[list[str], list[str]]:
     """用例级差异：(新增失败, 已修复)。两个集合都按 id 排序，输出稳定可比对。
 
     汇总数字（掉 1 条）只说"总量变了"，diff 才说明"是哪几条"——
     这正是评审里"固定测试集 + 用例级差异比较"要的东西。
+    base_ids / cur_ids 为显式 caseIds 时优先，避免依赖失败明细的文本格式。
     """
-    b, c = case_ids(base_failures), case_ids(cur_failures)
+    b = case_ids(base_failures, base_ids)
+    c = case_ids(cur_failures, cur_ids)
     return sorted(c - b), sorted(b - c)
+
+
+def flaky_verdict(failed_ids: list[str], history: dict[str, int],
+                  threshold: int = 3) -> tuple[list[str], list[str]]:
+    """连续波动升级：同一用例连续失败达到 threshold 轮 → 不再当随机波动。
+
+    history: {caseId: 之前连续失败轮数}。本轮 failed_ids 里的用例计数 +1，
+    不在本轮失败列表里的计数归零。返回 (升级为真退化的 id 列表, 更新后的 history)。
+
+    SKILL.md 写过"连续多轮出现同一条则应当真"，这里把它从一句提示变成
+    可执行判定；纯函数，可断言。threshold 由人显式给，不偷偷放宽默认值。
+    """
+    updated = {k: (v + 1 if k in set(failed_ids) else 0)
+               for k, v in (history or {}).items()}
+    for cid in failed_ids:
+        if cid not in updated:
+            updated[cid] = 1
+    escalated = sorted(k for k, v in updated.items() if v >= threshold and k in set(failed_ids))
+    return escalated, updated
 
 
 def main() -> int:
@@ -288,6 +320,10 @@ def main() -> int:
                          "（offline 0 / live-strict 0 / live 1）")
     ap.add_argument("--strict", action="store_true",
                     help="基线里有、本次缺失的 suite 也算失败（默认只提示）")
+    ap.add_argument("--flaky-history", default=None,
+                    help="连续波动历史 JSON（{caseId: 连续失败轮数}），与 --flaky-threshold 配合")
+    ap.add_argument("--flaky-threshold", type=int, default=3,
+                    help="同一用例连续失败多少轮升级为真退化（默认 3，由人显式定）")
     args = ap.parse_args()
 
     try:
@@ -303,7 +339,8 @@ def main() -> int:
     if args.update:
         payload = {"suites": {
             k: {"passed": v["passed"], "total": v["total"],
-                "kind": v["kind"], "failures": v["failures"]}
+                "kind": v["kind"], "failures": v["failures"],
+                **({"caseIds": v["caseIds"]} if v.get("caseIds") else {})}
             for k, v in sorted(current.items())}}
         os.makedirs(os.path.dirname(os.path.abspath(args.baseline)) or ".", exist_ok=True)
         with open(args.baseline, "w", encoding="utf-8") as fh:
@@ -321,6 +358,15 @@ def main() -> int:
     failures: list[str] = []
     notes: list[str] = []
     undecided = 0
+    flaky_history: dict[str, int] = {}
+    if args.flaky_history and os.path.exists(args.flaky_history):
+        try:
+            with open(args.flaky_history, encoding="utf-8-sig") as fh:
+                raw = json.load(fh)
+            if isinstance(raw, dict):
+                flaky_history = {str(k): int(v) for k, v in raw.items()}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            print(f"[WARN] --flaky-history 无法解析，按空历史处理（不静默编造）")
     # 退化的 suite 名单独收集，不要拿名字去 failures 的文本里做子串匹配：
     # 套件名互为前缀时（"A" 与 "A 强化"）会误挂明细，红的时候指错地方。
     failed_names: set[str] = set()
@@ -344,8 +390,11 @@ def main() -> int:
             drop = base["passed"] - p
             allow = args.allow_flip if args.allow_flip is not None \
                 else DEFAULT_ALLOW_FLIP.get(cur["kind"], 0)
-            # 用例级 diff：只在有失败明细时算；抽不出 id 就如实不报，不猜
-            new_failed, fixed = case_diff(base["failures"], cur["failures"])
+            # 用例级 diff：显式 caseIds 优先，没有才从失败明细首段抠 id。
+            # 抽不出 id 就如实不报，不猜。
+            new_failed, fixed = case_diff(
+                base["failures"], cur["failures"],
+                base.get("caseIds"), cur.get("caseIds"))
             if new_failed or fixed:
                 notes.append(f"「{name}」用例级变化：新增失败={new_failed or '无'}，"
                              f"已修复={fixed or '无'}")
@@ -360,6 +409,16 @@ def main() -> int:
                 mark = f"  ← 波动 {drop} 条（容忍内）"
                 notes.append(f"「{name}」掉 {drop} 条，在 {cur['kind']} 容忍范围内，"
                              f"连续多轮出现同一条则应当真")
+                # 连续波动升级：同一用例反复失败到阈值，不再吃容忍
+                if args.flaky_history:
+                    escalated, _ = flaky_verdict(
+                        new_failed, flaky_history, args.flaky_threshold)
+                    if escalated:
+                        mark = "  ← 退化（连续波动升级）"
+                        failed_names.add(name)
+                        failures.append(
+                            f"{name}[{cur['kind']}]：{escalated} 连续失败 "
+                            f"≥{args.flaky_threshold} 轮，不再按随机波动容忍")
             elif drop < 0:
                 notes.append(f"「{name}」提升 {-drop} 条，可考虑更新基线")
         lo, hi = wilson_interval(p, t)

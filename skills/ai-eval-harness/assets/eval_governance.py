@@ -37,17 +37,18 @@ for _s in (sys.stdout, sys.stderr):
 ROOT_CAUSES = ("数据问题", "检索问题", "切片问题", "提示词问题",
                "模型问题", "工具问题", "评测问题", "基础设施问题")
 
-# 关键词 → 类别。按 SKILL.md 的八类表，命中即归类；多命中取第一个。
-_CAUSE_RULES = [
-    ("基础设施问题", ("超时", "限流", "余额", "402", "401", "网络", "连接失败", "token 耗尽")),
-    ("评测问题", ("判据", "期望值", "错误跳过", "mustContain", "mustNotContain", "误报", "漏报", "基线", "分母")),
-    ("数据问题", ("知识库过期", "内容过期", "文档冲突", "互相冲突", "数据不一致")),
-    ("检索问题", ("未召回", "召回", "排序靠后", "漏检", "Recall")),
-    ("切片问题", ("切散", "切片边界", "截断", "articleId")),
-    ("提示词问题", ("规则冲突", "提示词冲突", "禁止回答", "不得回答")),
-    ("工具问题", ("参数错", "执行失败", "幂等", "越权调用", "重复调用")),
-    ("模型问题", ("幻觉", "编造", "推理错误", "极性答反", "答反")),
-]
+# 关键词 → 类别。词表外置到 markers.default.json（或 EVAL_MARKERS），
+# 换业务/换语言的日志措辞只改配置，不动判定逻辑。
+# 部署纪律：markers.py + markers.default.json 必须与本文件一起复制（同目录）。
+try:
+    from markers import load_markers as _load_markers  # noqa: E402
+except ImportError as _exc:
+    raise SystemExit(
+        "eval_governance.py 需要同目录的 markers.py（词表加载器）。\n"
+        "请把 assets/markers.py 与 assets/markers.default.json 一起部署。\n"
+        f"原始错误：{_exc}") from _exc
+_CAUSE_RULES = [(cause, tuple(keys))
+                for cause, keys in _load_markers()["causeRules"]]
 
 
 def classify_root_cause(failure: str) -> str:

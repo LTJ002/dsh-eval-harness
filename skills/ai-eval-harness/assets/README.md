@@ -134,12 +134,29 @@ selftest 仍然全绿——那批断言根本没覆盖到它自称在测的语�
 
 ## 接入一个真实项目要改什么
 
-1. `eval_online.py` 的 `login()` / `new_session()` / `chat()`——按项目的登录方式与 SSE 契约改
-2. `tool_calls_of()`——换成查你们审计表的 SQL（**保持三态，不要用空列表代替"查不到"**）
-3. `DEGRADED_MARKERS`——换成你们的降级文案特征
-4. 数据集换成自己的 `.jsonl`
-5. 结果目录：`eval_results.py` 的 `DEFAULT_DIR`，或环境变量 `EVAL_RESULTS_DIR`
-6. `mutation_check.py` 的 `MUTATIONS`——给你新增的判据配上一个变异点
+**先部署（必须一起复制，缺一个 import 就会报可行动错误）：**
+
+```
+assets/markers.py              # 词表加载器
+assets/markers.default.json    # 默认词表配置
+assets/adapters.py             # 适配器注册（可选，见第 2 条）
+assets/eval_*.py               # 判据引擎
+```
+
+`eval_online.py` / `eval_governance.py` 现在 `from markers import ...`，
+`markers.py` 按 `__file__` 定位同目录的 `markers.default.json`。
+**只复制 `eval_online.py` 会 `ModuleNotFoundError`**——这是刻意的可行动错误。
+
+1. **词表**：复制 `markers.default.json` 改写（降级文案、拒答话术、根因关键词等），
+   设置 `EVAL_MARKERS=<你的配置>`。**不要再改判据源码**。
+   `python markers.py --validate` 校验配置（空词表/缺字段会报错，不静默顶替）。
+2. **适配器**（推荐）：写一个小模块导出 `login()` / `new_session()` / `chat()` /
+   `tool_calls_of()` / `tool_call_records()` 中你要替换的函数，设置
+   `EVAL_ADAPTER=<模块文件>`。未实现的函数自动回退内置 base 实现。
+   这样**不必改 `eval_online.py` 源码**；`adapters.adapter_info()` 可查哪些生效。
+3. 数据集换成自己的 `.jsonl`（`*.example.jsonl` 是格式样板，不是题库）。
+4. 结果目录：`eval_results.py` 的 `DEFAULT_DIR`，或环境变量 `EVAL_RESULTS_DIR`。
+5. `mutation_check.py` 的 `MUTATIONS`——给你新增的判据配上一个变异点。
 
 其余（判定逻辑、降级跳过、PII 正则、基线对比、陈旧快照防护）都不用动。
 

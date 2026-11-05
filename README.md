@@ -100,6 +100,8 @@ except urllib.error.HTTPError as exc:
 
 **不需要重写的是判据引擎**：`eval_rag.py` 的指标数学、`eval_baseline.py` 的严格度、`eval_online.py` 的五条防误报纪律、`mutation_check.py` 的门禁机制——这些与业务无关，换项目零改动。`rag-retrieval.example.jsonl` 现在直接用 `<占位符>` 标出了每个字段该填什么。
 
+部署注意：`markers.py` + `markers.default.json` 必须与 `eval_online.py` / `eval_governance.py` **一起复制**（词表已外置），否则 import 会给出可行动错误；项目侧接口用 `EVAL_ADAPTER` 指向自己的适配器模块，无需改判据源码。
+
 ## 本地验证
 
 ```sh

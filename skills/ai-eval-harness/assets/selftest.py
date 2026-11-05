@@ -25,6 +25,9 @@ import eval_rag as RG
 import eval_manifest as M
 import eval_rag_answer as RA
 import eval_governance as G
+import markers as MK
+import adapters as AD
+import eval_report as RP
 
 FAILED = []
 
@@ -944,6 +947,102 @@ check("低一致率给出具体原因",
       any("一致率" in r for r in G.judge_agreement(labels_bad)["reasons"]))
 check("低 kappa 给出具体原因",
       any("kappa" in r for r in r_deg["reasons"]))
+
+
+# ---------- 扩展层：词表外置 / 适配器 / 报告 / 基线升级 ----------
+print("\n[18] 词表外置")
+marks = MK.load_markers()
+check("默认词表加载合规", MK.validate_markers(marks) == [], str(marks.keys()))
+check("词表键齐全", all(k in marks for k in
+                       ("degradedMarkers", "refusalMarkers", "negationMarkers",
+                        "successClaimMarkers", "failStatuses", "unitTokens", "causeRules")))
+# 外置后判据引擎读到的就是配置里的值（不是旧硬编码残留）
+check("eval_online 用配置里的降级词",
+      O.DEGRADED_MARKERS == marks["degradedMarkers"])
+check("eval_online 用配置里的拒答词",
+      O.REFUSAL_MARKERS == marks["refusalMarkers"])
+check("eval_governance 用配置里的根因规则",
+      len(G._CAUSE_RULES) == len(marks["causeRules"]))
+# 配置缺字段必须报错，不静默用默认值顶替
+import tempfile
+_cfg = Path(tempfile.mkdtemp()) / "bad-markers.json"
+_cfg.write_text(json.dumps({"degradedMarkers": ["x"]}), encoding="utf-8")
+try:
+    MK.load_markers(str(_cfg))
+    check("缺字段配置 → 报错", False, "没抛 SystemExit")
+except SystemExit:
+    check("缺字段配置 → 报错（不静默顶替）", True)
+# 空词表必须被校验器抓住（判据会静默失效）
+check("空词表 → 校验报违规",
+      any("为空" in b for b in MK.validate_markers(
+          {**marks, "degradedMarkers": ()})))
+_cfg.unlink()
+_cfg.parent.rmdir()
+
+print("\n[19] 适配器注册")
+check("未配置适配器 → 全部回退 base",
+      all(v == "base" for v in AD.adapter_info(None).values()))
+check("resolve(None) 回退到 base 模块的函数",
+      callable(getattr(AD._load_base(), "chat", None)))
+# 造一个只实现 chat 的适配器文件，验证部分实现 + 其余回退
+_ad = Path(tempfile.mkdtemp()) / "my_adapter.py"
+_ad.write_text("def chat(token, sid, q):\n    return ('ADAPTER-OK', 0.1)\n",
+               encoding="utf-8")
+mod = AD.load_adapter(str(_ad))
+info = AD.adapter_info(mod)
+check("适配器只实现的函数标 adapter", info["chat"] == "adapter", str(info))
+check("适配器未实现的函数回退 base", info["tool_calls_of"] == "base", str(info))
+check("适配器 chat 真的被调用",
+      AD.resolve(mod, "chat")("t", "s", "q") == ("ADAPTER-OK", 0.1))
+_ad.unlink()
+import shutil
+shutil.rmtree(_ad.parent, ignore_errors=True)  # import 适配器会生成 __pycache__
+
+print("\n[20] 报告层（只读）")
+txt = RP.build_report(rootcause={"by_cause": {"检索问题": 2}, "total": 2,
+                                 "unclassified": 0})
+check("报告含根因分层", "检索问题" in txt and "| 2 |" in txt)
+check("报告缺段如实标未提供", "未提供" in txt)
+# 精确到"结果分片"段：缺目录时必须标未提供，不能编造一个"分片数：0（估算）"
+_shard_section = RP.build_report().split("## 1. 结果分片")[1].split("## 2.")[0]
+check("报告缺分片目录时不编造数字",
+      "未提供" in _shard_section and "估算" not in _shard_section
+      and "分片数" not in _shard_section, _shard_section.strip())
+check("报告声明不替代门禁", "不替代" in txt)
+es = RP.effect_size(0.8, 0.9, 100, 100)
+check("效应量给出绝对差与 z", es["provided"] and abs(es["absoluteDiff"] - 0.1) < 1e-9)
+check("效应量零分母不编造", RP.effect_size(0.8, 0.9, 0, 10)["provided"] is False)
+sug = RP.suggest_threshold([0.9, 0.92, 0.91, 0.93, 0.9])
+check("阈值建议只读不自动应用", sug["provided"] and sug["applied"] is False)
+check("历史不足不给阈值建议", RP.suggest_threshold([0.9, 0.8])["provided"] is False)
+check("分片统计目录不存在如实标未提供",
+      RP.count_shards("_no_such_dir_")["provided"] is False)
+
+print("\n[21] 基线：显式 caseIds 与连续波动升级")
+check("显式 caseIds 优先于文本格式",
+      B.case_ids(["随便一句"], ["a1", "a2"]) == {"a1", "a2"})
+check("显式 caseIds 为空列表 → 回退文本抠 id（不静默吞掉 diff）",
+      B.case_ids(["a1 挂"], []) == {"a1"}, str(B.case_ids(["a1 挂"], [])))
+check("case_diff 空 caseIds 仍产出差异",
+      B.case_diff(["a1 挂"], ["a2 挂"], [], []) == (["a2"], ["a1"]))
+check("case_diff 用显式 ids",
+      B.case_diff([], [], ["a1"], ["a2"]) == (["a2"], ["a1"]))
+check("coerce 透传 caseIds",
+      B._coerce({"suite": "X", "passed": 1, "total": 2,
+                 "caseIds": ["a1"]}, "x.json")["caseIds"] == ["a1"])
+# 连续 3 轮同一条失败 → 升级；断续则归零
+esc1, h1 = B.flaky_verdict(["a1"], {}, 3)
+esc2, h2 = B.flaky_verdict(["a1"], h1, 3)
+esc3, h3 = B.flaky_verdict(["a1"], h2, 3)
+check("第 1/2 轮不升级", esc1 == [] and esc2 == [])
+check("第 3 轮连续失败 → 升级", esc3 == ["a1"], str((esc3, h3)))
+check("中断一轮后计数归零",
+      B.flaky_verdict([], h3, 3)[1]["a1"] == 0)
+check("阈值由人显式给，不偷偷放宽",
+      # 历史 9 轮 + 本轮 = 10 达到 threshold=10 应升级；把 threshold 提到 11 就不升级，
+      # 证明计数与阈值都是显式生效的，没有内置豁免。
+      B.flaky_verdict(["a1"], {"a1": 9}, 10)[0] == ["a1"]
+      and B.flaky_verdict(["a1"], {"a1": 9}, 11)[0] == [])
 
 
 for f in t2.glob("*"):

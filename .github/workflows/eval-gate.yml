@@ -44,6 +44,15 @@ jobs:
           python skills/ai-eval-harness/assets/eval_governance.py dataset \
             --dir ci/datasets
 
+      - name: 词表配置校验（外置词表不能空/缺字段）
+        run: python skills/ai-eval-harness/assets/markers.py --validate
+
+      - name: 报告层 CLI smoke（只读，退出码 0）
+        run: |
+          python skills/ai-eval-harness/assets/eval_report.py \
+            --results-dir ci/datasets \
+            --out "$RUNNER_TEMP/eval-report.md"
+
       - name: RAG 生成层 CLI smoke（合规数据，退出码 0）
         run: |
           python skills/ai-eval-harness/assets/eval_rag_answer.py \

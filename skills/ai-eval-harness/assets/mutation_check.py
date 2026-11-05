@@ -462,6 +462,38 @@ MUTATIONS = [
         '            bad.append(f"答案提到 {m.group(1)} 但无该支撑文档")',
         "中文普通名词不误报引用",
     ),
+    # ---- 本轮扩展层的判据（词表 / caseIds / 波动升级 / 报告）----
+    (
+        "caseIds 空列表当成显式提供（吞掉 diff）",
+        "eval_baseline.py",
+        "    if explicit_ids:  # 非空才算显式提供；[] 与 None 都回退",
+        "    if explicit_ids is not None:",
+        "显式 caseIds 为空列表 → 回退文本抠 id（不静默吞掉 diff）",
+    ),
+    (
+        "连续波动升级取消",
+        "eval_baseline.py",
+        "    escalated = sorted(k for k, v in updated.items() if v >= threshold and k in set(failed_ids))",
+        "    escalated = []",
+        "第 3 轮连续失败 → 升级",
+    ),
+    (
+        "词表缺字段时静默顶替",
+        "markers.py",
+        "        if not isinstance(value, expected):\n"
+        '            raise SystemExit(f"词表配置 {p} 缺字段或类型不对：{key} 应为 {expected.__name__}")',
+        "        if not isinstance(value, expected):\n"
+        "            value = [] if expected is list else ''\n"
+        "            data[key] = value",
+        "缺字段配置 → 报错（不静默顶替）",
+    ),
+    (
+        "报告缺段时编造数字",
+        "eval_report.py",
+        '        lines += ["- 未提供（未传 --results-dir 或目录不存在）", ""]',
+        '        lines += [f"- 分片数：{0}（估算）", ""]',
+        "报告缺段如实标未提供",
+    ),
 ]
 
 
@@ -506,11 +538,21 @@ def main() -> int:
     # 变异脚本自己就是一个会改写源码的脚本，历史上是"改了再 finally 恢复"。
     # 恢复逻辑再可靠也是兜底：进程被杀在写入与恢复之间，留下的就是坏源码。
     # 复制 selftest.py 是因为 run_selftest 按副本目录定位它。
+    # 副本集合必须包含 selftest 直接 import 的所有模块，否则副本里
+    # `import markers / adapters / eval_report` 会 ModuleNotFoundError，
+    # 每个变异都"翻红"= 全部假 caught。新增 import 时这里必须同步。
+    SELFTEST_DEPS = ("markers.py", "adapters.py", "eval_report.py",
+                     "eval_manifest.py", "eval_rag.py", "eval_rag_answer.py",
+                     "eval_governance.py", "eval_results.py", "eval_baseline.py",
+                     "eval_online.py")
     undetected = []
     tmpdir = Path(tempfile.mkdtemp(prefix="mutation_"))
     try:
-        for fname in sorted({m[1] for m in MUTATIONS} | {"selftest.py"}):
+        for fname in sorted({m[1] for m in MUTATIONS}
+                            | set(SELFTEST_DEPS) | {"selftest.py"}):
             shutil.copy2(HERE / fname, tmpdir / fname)
+        # 词表配置是数据文件，不参与变异但必须随加载器一起复制
+        shutil.copy2(HERE / "markers.default.json", tmpdir / "markers.default.json")
         for name, fname, old, new, expect in MUTATIONS:
             path = tmpdir / fname
             src = path.read_text(encoding="utf-8")

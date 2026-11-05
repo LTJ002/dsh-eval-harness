@@ -67,6 +67,24 @@ jobs:
           EVAL_USER: ${{ secrets.EVAL_USER }}
           EVAL_PASSWORD: ${{ secrets.EVAL_PASSWORD }}
           EVAL_AUDIT_LOG: ${{ secrets.EVAL_AUDIT_LOG }}
+          # 可选：项目侧适配器与词表（不配则用内置 base 与默认词表）
+          EVAL_ADAPTER: ${{ vars.EVAL_ADAPTER }}
+          EVAL_MARKERS: ${{ vars.EVAL_MARKERS }}
         run: python scripts/eval_online.py --all --record
-      - name: 基线对比
+      - name: 基线对比（退出码 1=退化 / 2=不可用，都阻断）
         run: python scripts/eval_baseline.py --results eval-results --baseline eval/baseline.json
+      - name: 汇总报告（只读，不设门禁）
+        # 下面 --rootcause-json / --manifest-a/b 引用的文件需要你自己的流程产出：
+        #   run-manifest.json      ← eval_manifest.py --out（本轮评测后生成）
+        #   run-manifest.prev.json ← 上一轮的同一文件（自行保留/归档）
+        #   rootcause-report.json  ← eval_governance.py rootcause --report（对失败明细归类）
+        # 传不到的段报告会如实标"未提供"，不编造数字。
+        run: |
+          python scripts/eval_report.py \
+            --results-dir eval-results \
+            --rootcause-json eval/rootcause-report.json \
+            --manifest-a eval/run-manifest.prev.json \
+            --manifest-b eval/run-manifest.json \
+            --out eval/eval-report.md
+          # 报告只是给人看的汇总；上面的基线对比才是门禁。
+          # 这一段即使失败也不该用 `|| true` 掩盖——若报告本身要紧，就让它红。

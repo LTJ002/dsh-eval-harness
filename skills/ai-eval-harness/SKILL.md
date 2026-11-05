@@ -693,6 +693,25 @@ CI 用 `ci/datasets/ci-compliant.jsonl` 跑真门禁。selftest [17] 与变异�
 | 降级/超时把通过率拉低，看着像退化 | 分母要取"真正被测到的条数"，跳过的不进分母 |
 | 402 余额耗尽被重试逻辑反复重打 | 余额不足是 ERROR/不可判定，不是网络抖动；重试一万次也不会好 |
 
+## 可扩展点：换项目不动判据引擎
+
+三个接缝把"改源码"变成"改配置/加模块"：
+
+1. **词表外置**：`markers.py` + `markers.default.json` 收拢降级/拒答/否定/成功/失败/单位/根因七组词表。
+   换业务或换语言只改配置（`EVAL_MARKERS`），`python markers.py --validate` 校验；
+   空词表/缺字段直接报错，不静默顶替。**两个文件必须一起部署**——只复制
+   `eval_online.py` 会拿到可行动的 import 错误，而不是悄悄用旧词表。
+2. **适配器注册**：写一个小模块导出 `login()` / `chat()` / `tool_calls_of()` /
+   `tool_call_records()` 中你要替换的函数，设置 `EVAL_ADAPTER=<模块文件>`。
+   未实现的函数自动回退内置 base（原 HTTP/SSE 实现），`adapters.adapter_info()`
+   可查哪些生效。项目侧接口不再要求改评测器源码。
+3. **基线深化**：结果可带显式 `caseIds`（空列表视为未提供，回退文本抠 id），
+   `--flaky-history` + `--flaky-threshold` 让"同一用例连续失败 N 轮"自动升级为真退化，
+   不再吃「容忍 1 条波动」——SKILL.md 里那句"连续多轮出现同一条则应当真"由此可执行。
+
+`eval_report.py` 只读汇总，不设门禁；`effect_size()` / `suggest_threshold()` 给的是
+**描述性线索与只读建议**（`applied: false`），是否采用永远由人显式写进参数。
+
 ## 落地清单
 
 ```
@@ -707,6 +726,12 @@ scripts/ 或 assets/
   eval_rag_answer.py   # RAG 生成层指标（Faithfulness/引用/完整性/矛盾，基于人工标注对）
   eval_governance.py   # 根因分层 / 数据集治理 / Judge 校准（三个子命令）
   eval_manifest.py     # 运行清单：提示词/数据集指纹 + config，回答"为什么和上次不一样"
+  eval_report.py       # 汇总报告（只读，不设门禁）+ 效应量/阈值只读建议
+  markers.py           # 词表加载器（与 markers.default.json 一起部署）
+  markers.default.json # 降级/拒答/否定/成功/失败/单位/根因七组判据词表
+  adapters.py          # 适配器注册：EVAL_ADAPTER 指向项目侧模块，未实现函数回退 base
+  EvalResults.mjs      # Node 落盘器（与 Python/Java 同形，进 npm test）
+  CROSS_LANGUAGE.md    # 其他语言落盘器的 JSON 形状约定
   ci-eval.yml.example  # 给接入方的 CI/CD 模板（本仓库自身用 .github/workflows/eval-gate.yml）
   selftest.py          # 判据与分母纪律的回归测试
   mutation_check.py    # 负向对照：把实现改坏，验证断言会翻红
@@ -744,6 +769,11 @@ python eval_baseline.py --results eval-results --baseline eval/baseline.json
 | `assets/eval_rag_answer.py` | **RAG 生成层指标**：Faithfulness / Citation Correctness / Answer Completeness / 矛盾检测，判定依据来自人工标注对（不用模型互评），无依据与矛盾零容忍 |
 | `assets/eval_governance.py` | **治理三件套**：根因分层 / 数据集治理（唯一 ID、正反向、三集隔离、冻结哈希）/ Judge 校准（一致率+kappa 不达标禁止进门禁） |
 | `assets/eval_manifest.py` | **运行清单**：提示词与数据集 sha256 指纹 + config + `manifest_diff()`，回答"这次和上次为什么不一样" |
+| `assets/eval_report.py` | **汇总报告**：把基线/根因/指纹/分片汇成一份只读 Markdown+JSON，附效应量与阈值**只读建议**，不设门禁 |
+| `assets/markers.py` + `markers.default.json` | **外置词表**：降级/拒答/否定/成功/失败/单位/根因七组；换业务只改配置，`EVAL_MARKERS` 指向新文件，两者必须一起部署 |
+| `assets/adapters.py` | **适配器注册**：`EVAL_ADAPTER` 指向项目侧模块，可只实现部分函数，其余回退内置 base；不改判据源码 |
+| `assets/EvalResults.mjs` | **Node 落盘器**：与 Python/Java 同形 JSON，进 `npm test`（含 Python 互读验证） |
+| `assets/CROSS_LANGUAGE.md` | 其他语言落盘器的 JSON 形状约定与写入纪律 |
 | `assets/ci-eval.yml.example` | **CI/CD 三 gate 模板**：评测器自检+变异 / 离线基线（退出码 1、2 都阻断）/ 在线定时 |
 | `assets/EvalResults.java` | JUnit 场景用，产出的 JSON 形状与 Python 版一致 |
 | `assets/datasets/*.example.jsonl` | 数据集样例：answer（含 `expected`）/ tool（含五阶段）/ inject / multi-turn / rag-retrieval |
