@@ -49,12 +49,22 @@ dsh plugin add https://github.com/LTJ002/dsh-eval-harness
 | 文件 | 用途 |
 |---|---|
 | `assets/eval_results.py` | 结果落盘（分片 + `kind` 字段，防并发覆盖） |
-| `assets/eval_baseline.py` | 基线对比：按绝对条数判退化；offline / **live-strict** / live 三档严格度；分母变化不判定 |
-| `assets/eval_online.py` | 在线评测骨架：`tool` / `inject` / `answer` 三套件，内置五条防误报纪律 |
+| `assets/eval_baseline.py` | 基线对比：按绝对条数判退化；offline / **live-strict** / live 三档严格度；Wilson 置信区间、用例级 diff、连续波动升级；分母变化不判定 |
+| `assets/eval_online.py` | 在线评测骨架：**四套件**（`tool` / `inject` / `answer` / `multi-turn`），五条防误报纪律 + `expected` 结构化判据 + 工具五阶段 |
+| `assets/eval_rag.py` | RAG 检索层：Recall@K / MRR / nDCG@K / Precision@K |
+| `assets/eval_rag_answer.py` | RAG 生成层：Faithfulness / 引用准确性 / 完整性 / 矛盾检测（基于人工标注对，不用模型互评） |
+| `assets/eval_governance.py` | 治理三件套：根因分层 / 数据集治理 / Judge 校准（一致率 + kappa 不达标禁止进门禁） |
+| `assets/eval_manifest.py` | 运行清单：提示词与数据集 sha256 指纹 + config diff |
+| `assets/eval_report.py` | 汇总报告（只读，不设门禁）+ 效应量与阈值**只读建议** |
+| `assets/markers.py` + `markers.default.json` | 外置词表（7 组）；换业务只改配置，`EVAL_MARKERS` 覆盖；两者必须一起部署 |
+| `assets/adapters.py` | 适配器注册：`EVAL_ADAPTER` 指向项目侧模块，未实现函数回退内置 base |
 | `assets/selftest.py` | 判据与分母纪律的回归自检（改任何脚本后必跑） |
 | `assets/mutation_check.py` | 变异测试：把实现改坏，验证断言会翻红；在临时副本上施加变异 |
-| `assets/EvalResults.java` | JUnit 场景的结果落盘，JSON 形状与 Python 版一致 |
-| `assets/datasets/*.example.jsonl` | 数据集样例（换项目必须整体替换） |
+| `assets/EvalResults.java` / `EvalResults.mjs` | JUnit / Node 场景的结果落盘，JSON 形状与 Python 版一致 |
+| `assets/CROSS_LANGUAGE.md` | 其他语言落盘器的 JSON 形状约定与写入纪律 |
+| `assets/ci-eval.yml.example` | 给接入方的 CI/CD 三 gate 模板 |
+| `assets/datasets/*.example.jsonl` | 数据集样例（`<占位符>` 格式样板，换项目必须整体替换） |
+| `assets/install.ps1` | 把 bundle 从仓库副本装到用户级 skill 根；`-VerifyOnly` 校验分叉 |
 | `assets/install.ps1` | 把 bundle 从仓库副本装到用户级 skill 根；`-VerifyOnly` 校验分叉 |
 
 ## 五条防误报纪律（`eval_online.py` 固化为可运行代码）
@@ -100,7 +110,7 @@ except urllib.error.HTTPError as exc:
 
 **不需要重写的是判据引擎**：`eval_rag.py` 的指标数学、`eval_baseline.py` 的严格度、`eval_online.py` 的五条防误报纪律、`mutation_check.py` 的门禁机制——这些与业务无关，换项目零改动。`rag-retrieval.example.jsonl` 现在直接用 `<占位符>` 标出了每个字段该填什么。
 
-部署注意：`markers.py` + `markers.default.json` 必须与 `eval_online.py` / `eval_governance.py` **一起复制**（词表已外置），否则 import 会给出可行动错误；项目侧接口用 `EVAL_ADAPTER` 指向自己的适配器模块，无需改判据源码。
+部署注意：`markers.py` + `markers.default.json` 必须与 `eval_online.py` / `eval_governance.py` **一起复制**（词表已外置），否则 import 会给出可行动错误；换业务词表用 `EVAL_MARKERS=<你的配置>`，项目侧接口用 `EVAL_ADAPTER` 指向自己的适配器模块，均无需改判据源码。
 
 ## 本地验证
 

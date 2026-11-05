@@ -49,12 +49,21 @@ LangChain / LangChain4j appear in the docs only as examples when explaining chun
 | File | Purpose |
 |---|---|
 | `assets/eval_results.py` | Result shards (per-suite files + `kind` field, concurrency-safe) |
-| `assets/eval_baseline.py` | Baseline diff: regression by absolute counts; offline / **live-strict** / live strictness tiers; denominator change 鈬?undecided |
-| `assets/eval_online.py` | Online suite skeleton: `tool` / `inject` / `answer`, with five anti-false-signal disciplines built in |
+| `assets/eval_baseline.py` | Baseline diff: regression by absolute counts; offline / **live-strict** / live tiers; Wilson CI, case-level diff, flaky-run escalation; denominator change -> undecided |
+| `assets/eval_online.py` | Online skeleton: four suites (`tool` / `inject` / `answer` / `multi-turn`), five anti-false-signal disciplines, `expected` structured criteria, tool five stages |
+| `assets/eval_rag.py` | RAG retrieval: Recall@K / MRR / nDCG@K / Precision@K |
+| `assets/eval_rag_answer.py` | RAG generation: Faithfulness / Citation Correctness / Completeness / contradiction, from human annotation pairs (no model-on-model scoring) |
+| `assets/eval_governance.py` | Governance: root-cause tiers / dataset governance / Judge calibration (agreement + kappa; failing either blocks the gate) |
+| `assets/eval_manifest.py` | Run manifest: prompt/dataset sha256 fingerprints + config diff |
+| `assets/eval_report.py` | Read-only aggregated report (Markdown/JSON) + effect size and **read-only** threshold suggestion |
+| `assets/markers.py` + `markers.default.json` | Externalized word lists (7 groups); override with `EVAL_MARKERS`; deploy both together |
+| `assets/adapters.py` | Adapter registry: `EVAL_ADAPTER` points at your module; unimplemented functions fall back to built-in base |
 | `assets/selftest.py` | Regression self-test for the denominator/criteria discipline (run after touching any script) |
 | `assets/mutation_check.py` | Mutation testing: break the implementation, assert the tests go red; mutations applied to a temp copy |
-| `assets/EvalResults.java` | JUnit-side result writer, JSON shape identical to the Python one |
-| `assets/datasets/*.example.jsonl` | Dataset samples (replace wholesale for your project) |
+| `assets/EvalResults.java` / `EvalResults.mjs` | JUnit / Node result writers, JSON shape identical to the Python one |
+| `assets/CROSS_LANGUAGE.md` | JSON shape contract and write discipline for other languages |
+| `assets/ci-eval.yml.example` | Three-gate CI/CD template for adopters |
+| `assets/datasets/*.example.jsonl` | Dataset samples (`<placeholder>` format templates; replace wholesale for your project) |
 | `assets/install.ps1` | Install the bundle from a repo copy to the user-level skill root; `-VerifyOnly` checks for drift |
 
 ## Five anti-false-signal disciplines (executable in `eval_online.py`)
