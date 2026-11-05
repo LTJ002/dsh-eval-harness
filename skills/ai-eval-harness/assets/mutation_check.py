@@ -413,16 +413,54 @@ MUTATIONS = [
         "eval_governance.py",
         '            bad.append("冻结集内容被改动（frozen 只读，改需换版本号并写明原因）")',
         "            pass",
-        "冻结集被改 → 违规",
+        "改 frozen 集 → 违规",
     ),
     (
-        "Judge 低一致率仍放行",
+        "冻结哈希退回全量（dev 改动误报）",
+        "eval_governance.py",
+        "        frozen_cases = [c for c in cases if c.get(\"split\") == \"frozen\"]",
+        "        frozen_cases = cases",
+        "只改 dev 集 → 不误报冻结集违规",
+    ),
+    (
+        "Judge 只拦一致率不拦 kappa",
+        "eval_governance.py",
+        '    if kappa < min_kappa:\n'
+        '        reasons.append(f"kappa {kappa:.3f} < {min_kappa}（一致率虚高，Judge 无分辨力）")',
+        "    if False:\n"
+        '        reasons.append(f"kappa {kappa:.3f} < {min_kappa}（一致率虚高，Judge 无分辨力）")',
+        "全同标签 agreement=1 但 kappa=0 → 禁止进门禁",
+    ),
+    (
+        "Judge 一致率与 kappa 都不拦（无脑放行）",
         "eval_governance.py",
         '    if rate < min_agreement:\n'
-        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")',
+        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")\n'
+        '    if kappa < min_kappa:\n'
+        '        reasons.append(f"kappa {kappa:.3f} < {min_kappa}（一致率虚高，Judge 无分辨力）")',
         "    if False:\n"
-        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")',
+        '        reasons.append(f"一致率 {rate:.3f} < {min_agreement}")\n'
+        "    if False:\n"
+        '        reasons.append(f"kappa {kappa:.3f} < {min_kappa}（一致率虚高，Judge 无分辨力）")',
         "一致率 0 → 禁止进门禁",
+    ),
+    (
+        "归一化吞掉单位（百分比与纯数字混淆）",
+        "eval_rag_answer.py",
+        '        out.append((sign + raw.replace(",", "") + unit))',
+        '        out.append((sign + raw.replace(",", "")))',
+        "numbers_of 保留百分号单位",
+    ),
+    (
+        "引用改回中文正则猜测",
+        "eval_rag_answer.py",
+        "    for c in (cited_docs or []):\n"
+        "        if c not in supporting_docs:\n"
+        '            bad.append(f"答案提到 {c} 但无该支撑文档")',
+        "    for m in re.finditer(r\"(?:据|根据|见|引自)\\s*([\\w-]+)\", answer):\n"
+        "        if m.group(1) not in supporting_docs:\n"
+        '            bad.append(f"答案提到 {m.group(1)} 但无该支撑文档")',
+        "中文普通名词不误报引用",
     ),
 ]
 

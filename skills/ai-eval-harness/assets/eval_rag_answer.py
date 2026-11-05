@@ -6,6 +6,8 @@
 本脚本**不调用任何模型**给答案打分。判定依据全部来自人工标注对（外部事实）：
     supportFacts   答案里每句应能追溯到的知识库事实（支撑句）
     citations      每个结论应引用的文档 id
+    supportingDocs 检索/标注记录里真实存在的支撑文档 id 集合（外部事实）
+    citedDocs      答案里实际提到的文档 id（由系统/标注给出，不从中文里猜）
     requiredPoints 必答要点（缺一个就不完整）
     contradictions 与该答案矛盾的已知事实（含符号/单位错误）
 
@@ -13,6 +15,7 @@
     {"id":"g1","answer":"需提前 48 小时申请，加收 10% 费用。",
      "supportFacts":["改期需提前 48 小时","改期加收 10% 服务费"],
      "citations":["policy-appointment"],
+     "supportingDocs":["policy-appointment"],
      "requiredPoints":["48"],
      "contradictions":["不需要提前"]}
 
@@ -40,12 +43,20 @@ for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
         _s.reconfigure(encoding="utf-8", errors="replace")
 
-_NUMBER = re.compile(r"[+-]?\d[\d,]*(?:\.\d+)?%?")
+_NUMBER = re.compile(r"([+-]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|个百分点)?")
 
 
 def numbers_of(text: str) -> list[str]:
-    """抽出文本里的数字符号串（含 % 与千分位归一化），用于事实溯源。"""
-    return [m.group(0).replace(",", "") for m in _NUMBER.finditer(text)]
+    """抽出文本里的数字符号串（含 % 与千分位归一化），用于事实溯源。
+
+    "10 %" 与 "10%" 是表示差异，不是事实差异——按 SKILL.md 陷阱一，
+    归一化只修表示、不吞语义，这里把两者统一成 "10%"。
+    """
+    out = []
+    for m in _NUMBER.finditer(text):
+        sign, raw, unit = m.group(1), m.group(2), m.group(3) or ""
+        out.append((sign + raw.replace(",", "") + unit))
+    return out
 
 
 def check_faithfulness(answer: str, support_facts: list[str]) -> list[str]:
@@ -65,11 +76,14 @@ def check_faithfulness(answer: str, support_facts: list[str]) -> list[str]:
 
 
 def check_citations(answer: str, citations: list[str],
-                    supporting_docs: list[str] | None = None) -> list[str]:
+                    supporting_docs: list[str] | None = None,
+                    cited_docs: list[str] | None = None) -> list[str]:
     """引用准确性：声明引用的文档必须真的在支撑文档集合里。
 
     supporting_docs 来自检索/标注记录（外部事实）。传 None 时只报告"无法核对"
     并判为不合格——引而不支不能因为"没给数据"就算通过。
+    cited_docs 是答案里实际提到的文档 id（由你的系统/标注提供）；不用正则
+    从中文里猜——"根据政策文档"里的"政策文档"是普通名词，猜成 doc id 会误报。
     """
     bad: list[str] = []
     if not citations:
@@ -79,10 +93,9 @@ def check_citations(answer: str, citations: list[str],
     missing = [c for c in citations if c not in supporting_docs]
     if missing:
         bad.append(f"引用不支撑：{missing} 不在支撑文档里")
-    # 答案里若出现"据 X 文档"式声明，也要对得上
-    for m in re.finditer(r"(?:据|根据|见|引自)\s*([\w-]+)", answer):
-        if m.group(1) not in supporting_docs:
-            bad.append(f"答案提到 {m.group(1)} 但无该支撑文档")
+    for c in (cited_docs or []):
+        if c not in supporting_docs:
+            bad.append(f"答案提到 {c} 但无该支撑文档")
     return bad
 
 
@@ -102,7 +115,7 @@ def check_answer(case: dict) -> list[str]:
     bad: list[str] = []
     bad += check_faithfulness(answer, case.get("supportFacts") or [])
     bad += check_citations(answer, case.get("citations") or [],
-                           case.get("supportingDocs"))
+                           case.get("supportingDocs"), case.get("citedDocs"))
     bad += check_completeness(answer, case.get("requiredPoints") or [])
     bad += check_contradictions(answer, case.get("contradictions") or [])
     return bad

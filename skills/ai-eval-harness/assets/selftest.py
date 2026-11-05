@@ -839,6 +839,28 @@ check("命中矛盾形态（极性答反）→ 判失败",
                                        "contradictions": ["不需要提前"]})))
 check("数字千分位归一化后溯源",
       RA.check_faithfulness("金额 1,000 元", ["金额 1000 元"]) == [])
+# "10 %" 与 "10%" 是表示差异，不该被当成无依据数字（陷阱一：归一化不吞语义）
+check("数字与百分号间空格归一化后溯源",
+      RA.check_faithfulness("加收 10 % 费用", ["加收 10% 服务费"]) == [])
+check("带空格的负号/百分点归一",
+      RA.check_faithfulness("- 100 个百分点", ["下降 -100 个百分点"]) == [])
+# 单位必须保留：10% 与 10 是不同事实，归一化不能把单位吞掉
+check("numbers_of 保留百分号单位",
+      RA.numbers_of("10%") == ["10%"] and RA.numbers_of("10 %") == ["10%"])
+check("百分比与纯数字不混淆",
+      RA.check_faithfulness("增长 10%", ["增长 10"]) != [])
+# 中文普通名词不再被正则误当成文档 id（改用显式 citedDocs）
+check("中文普通名词不误报引用",
+      RA.check_citations("根据政策文档，提前 48 小时", ["policy-appointment"],
+                         ["policy-appointment"]) == [])
+check("见/引自 中文短语不误报引用",
+      RA.check_citations("见附件说明，引自内部手册", ["policy-appointment"],
+                         ["policy-appointment"]) == [])
+# 显式 citedDocs 里的 id 仍要核对
+check("显式 citedDocs 不在支撑集 → 判失败",
+      any("答案提到" in b for b in RA.check_citations(
+          "答案正文", ["policy-appointment"], ["policy-appointment"],
+          ["doc-x"])))
 check("未要求引用时不误判", RA.check_citations("提前 48 小时", [], None) == [])
 
 
@@ -869,23 +891,59 @@ check("无反向用例 → 违规", any("没有反向用例" in b for b in G.val
     [{"id": "p1", "why": "x", "mustContain": ["48"]}])))
 check("非法 split → 违规", any("split" in b for b in G.validate_dataset(
     good_ds + [{"id": "p2", "why": "x", "split": "production"}])))
+# 冻结集哈希：基准必须只对 frozen 子集算，且断言要独立构造、不与实现同源。
+# 旧断言用全量 good_ds 算哈希再追加一条，恰好把"对全量算"的错误语义钉成正确（假绿）。
 import hashlib
-frozen = hashlib.sha256(json.dumps(good_ds, ensure_ascii=False,
-                                   sort_keys=True).encode("utf-8")).hexdigest()
+frozen_cases = [{"id": "f1", "why": "冻结", "mustRefuse": True, "split": "frozen"}]
+dev_cases = [{"id": "p1", "why": "正向", "mustContain": ["48"], "split": "dev"}]
+validation_cases = [{"id": "n1", "why": "反向", "mustRefuse": True, "split": "validation"}]
+frozen_hash = hashlib.sha256(json.dumps(frozen_cases, ensure_ascii=False,
+                                        sort_keys=True).encode("utf-8")).hexdigest()
 check("冻结集未改 → 通过",
-      G.validate_dataset(good_ds, frozen_hash=frozen) == [])
-check("冻结集被改 → 违规", any("冻结集" in b for b in G.validate_dataset(
-    good_ds + [{"id": "p3", "why": "x", "mustRefuse": True}], frozen_hash=frozen)))
+      G.validate_dataset(dev_cases + frozen_cases, frozen_hash=frozen_hash) == [])
+# 改 dev / validation 集是合法迭代，不该报"冻结集被改"
+dev_changed = [{"id": "p1", "why": "改了开发集描述", "mustContain": ["48"], "split": "dev"}]
+check("只改 dev 集 → 不误报冻结集违规",
+      G.validate_dataset(dev_changed + frozen_cases, frozen_hash=frozen_hash) == [])
+check("只改 validation 集 → 不误报冻结集违规",
+      G.validate_dataset(dev_cases + [{"id": "n1", "why": "改了验证集",
+                                     "mustRefuse": True, "split": "validation"}]
+                         + frozen_cases, frozen_hash=frozen_hash) == [])
+# 真改 frozen 集才报
+frozen_changed = [{"id": "f1", "why": "偷偷改了冻结集", "mustRefuse": True,
+                   "split": "frozen"}]
+check("改 frozen 集 → 违规", any("冻结集" in b for b in G.validate_dataset(
+    dev_cases + frozen_changed, frozen_hash=frozen_hash)))
 
-# Judge 校准：小样本/低一致率必须禁止进门禁
-labels_ok = [{"human": "pass", "judge": "pass"} for _ in range(20)]
-check("一致率 1.0 + 足量样本 → 放行", G.judge_agreement(labels_ok)["gate"] is True)
+# Judge 校准：一致率 + kappa + 标注分布，三者都得过。
+# 旧断言 labels_ok 全是 pass（kappa=0）却断言放行，把"全猜同一类"盲区钉成正确。
+labels_ok = ([{"human": "pass", "judge": "pass"} for _ in range(10)]
+             + [{"human": "fail", "judge": "fail"} for _ in range(10)])
+check("一致率与 kappa 都达标 → 放行",
+      G.judge_agreement(labels_ok)["gate"] is True)
+check("kappa 达标值正确",
+      G.judge_agreement(labels_ok)["kappa"] == 1.0)
 labels_bad = [{"human": "pass", "judge": "fail"} for _ in range(20)]
 check("一致率 0 → 禁止进门禁", G.judge_agreement(labels_bad)["gate"] is False)
+# 全同标签：一致率 1.0 但 kappa=0（毫无分辨力），必须拦
+labels_degenerate = [{"human": "pass", "judge": "pass"} for _ in range(20)]
+r_deg = G.judge_agreement(labels_degenerate)
+check("全同标签 agreement=1 但 kappa=0 → 禁止进门禁",
+      r_deg["agreement"] == 1.0 and r_deg["kappa"] == 0.0
+      and r_deg["gate"] is False, str(r_deg))
+# 高度不平衡：19 fail + 1 pass，Judge 全猜 fail，一致率 0.95 但 kappa=0
+labels_skewed = ([{"human": "fail", "judge": "fail"} for _ in range(19)]
+                 + [{"human": "pass", "judge": "fail"}])
+r_skew = G.judge_agreement(labels_skewed)
+check("高度不平衡一致率虚高 → 被 kappa 拦下",
+      r_skew["agreement"] > 0.9 and r_skew["gate"] is False
+      and any("kappa" in r for r in r_skew["reasons"]), str(r_skew))
 check("样本不足 → 禁止进门禁",
       G.judge_agreement(labels_ok[:3])["gate"] is False)
 check("低一致率给出具体原因",
       any("一致率" in r for r in G.judge_agreement(labels_bad)["reasons"]))
+check("低 kappa 给出具体原因",
+      any("kappa" in r for r in r_deg["reasons"]))
 
 
 for f in t2.glob("*"):

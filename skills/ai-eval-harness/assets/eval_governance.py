@@ -105,8 +105,12 @@ def validate_dataset(cases: list[dict], *, frozen_hash: str | None = None) -> li
     if not has_negative:
         bad.append("数据集没有反向用例（测不出编造/越权）")
     if frozen_hash is not None:
+        # 只对 split == "frozen" 的子集算哈希：调试集/验证集本来就要迭代，
+        # 把它们算进去会把合法改动误报成"冻结集被改"，也会让改 frozen 集
+        # 时靠同步改 dev 集抵消哈希而漏报。
+        frozen_cases = [c for c in cases if c.get("split") == "frozen"]
         actual = hashlib.sha256(
-            json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            json.dumps(frozen_cases, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
         if actual != frozen_hash:
             bad.append("冻结集内容被改动（frozen 只读，改需换版本号并写明原因）")
@@ -131,29 +135,38 @@ def load_jsonl(path: str) -> list[dict]:
 # ---------------------------------------------------------------- Judge 校准
 
 def judge_agreement(labels: list[dict], min_agreement: float = 0.8,
-                    min_samples: int = 20) -> dict:
+                    min_samples: int = 20, min_kappa: float = 0.6) -> dict:
     """Judge 与人工标注的一致性。低于门槛 → gate=False（禁止 Judge 进门禁）。
 
     labels: [{"human": "pass", "judge": "pass"}, ...]，二值或任意字符串标签。
     返回一致率、kappa、样本数、是否放行，以及**为什么不放行**。
+
+    只看一致率会被"全猜同一类"骗过：19 fail + 1 pass、Judge 全判 fail
+    的一致率是 0.95，但 kappa=0（毫无分辨力）。所以 kappa 必须参与门禁，
+    并且标注分布退化（人工标注几乎只有一个类别）时直接不放行——
+    这样的标注集本身无法证明 Judge 有分辨力。
     """
     n = len(labels)
     agree = sum(1 for x in labels if x.get("human") == x.get("judge"))
     rate = agree / n if n else 0.0
-    human_pos = sum(1 for x in labels if x.get("human") in ("pass", "yes", True))
-    judge_pos = sum(1 for x in labels if x.get("judge") in ("pass", "yes", True))
-    p_h = human_pos / n if n else 0.0
-    p_j = judge_pos / n if n else 0.0
-    expected = p_h * p_j + (1 - p_h) * (1 - p_j)
+    # 用实际出现过的标签算边际分布，不假设只有 pass/fail 二值
+    humans = [x.get("human") for x in labels]
+    judges = [x.get("judge") for x in labels]
+    h_counts, j_counts = Counter(humans), Counter(judges)
+    expected = sum((h_counts[k] / n) * (j_counts[k] / n)
+                   for k in set(h_counts) | set(j_counts)) if n else 0.0
     kappa = (rate - expected) / (1 - expected) if expected < 1 else 0.0
+
     reasons = []
     if n < min_samples:
         reasons.append(f"标注样本 {n} < {min_samples}，不足以校准")
     if rate < min_agreement:
         reasons.append(f"一致率 {rate:.3f} < {min_agreement}")
+    if kappa < min_kappa:
+        reasons.append(f"kappa {kappa:.3f} < {min_kappa}（一致率虚高，Judge 无分辨力）")
     return {"samples": n, "agreement": round(rate, 4),
             "kappa": round(kappa, 4), "gate": not reasons,
-            "reasons": reasons or ["一致率达标，可作为辅助分（仍不单独决定门禁）"]}
+            "reasons": reasons or ["一致率与 kappa 达标，可作为辅助分（仍不单独决定门禁）"]}
 
 
 def main() -> int:
@@ -172,6 +185,7 @@ def main() -> int:
     p3.add_argument("--labels", required=True, help="人工/Judge 标注对 JSON 数组")
     p3.add_argument("--min-agreement", type=float, default=0.8)
     p3.add_argument("--min-samples", type=int, default=20)
+    p3.add_argument("--min-kappa", type=float, default=0.6)
 
     args = ap.parse_args()
 
@@ -200,7 +214,8 @@ def main() -> int:
 
     if args.cmd == "judge":
         labels = json.load(open(args.labels, encoding="utf-8-sig"))
-        r = judge_agreement(labels, args.min_agreement, args.min_samples)
+        r = judge_agreement(labels, args.min_agreement, args.min_samples,
+                            args.min_kappa)
         print(json.dumps(r, ensure_ascii=False, indent=2))
         return 0 if r["gate"] else 1
 

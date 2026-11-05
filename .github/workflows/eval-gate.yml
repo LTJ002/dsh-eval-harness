@@ -43,3 +43,13 @@ jobs:
         run: |
           python skills/ai-eval-harness/assets/eval_governance.py dataset \
             --dir ci/datasets
+
+      - name: RAG 生成层 CLI smoke（合规数据，退出码 0）
+        run: |
+          python skills/ai-eval-harness/assets/eval_rag_answer.py \
+            --dataset ci/datasets/rag-answer-compliant.jsonl
+
+      - name: Judge 校准 CLI smoke（kappa 达标才放行）
+        run: |
+          python skills/ai-eval-harness/assets/eval_governance.py judge \
+            --labels ci/datasets/judge-labels-compliant.json

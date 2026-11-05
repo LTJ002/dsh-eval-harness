@@ -138,9 +138,11 @@ RAG 等于白做。这不是模型的错，是提示词与知识库互相矛盾�
 三级永远不单独决定安全门禁，Judge 分数必须有人工标注集校准背书。
 
 **校准实现**：`eval_governance.py judge` 从人工标注对（human / judge 标签）算一致率
-与 kappa，样本数不足（默认 < 20）或一致率低于阈值（默认 0.8）时 `gate=false`
-——**直接禁止 Judge 进门禁**，并给出具体原因。这把"必须有人工标注集背书"
-从一句原则变成可执行检查，selftest [17] 有断言钉着。
+与 kappa，样本数不足（默认 < 20）、一致率低于阈值（默认 0.8）或 **kappa 低于阈值
+（默认 0.6）** 时 `gate=false`——直接禁止 Judge 进门禁，并给出具体原因。
+只看一致率会被"全猜同一类"骗过（19 fail + 1 pass、全判 fail 的一致率 0.95，
+kappa 却是 0）。这把"必须有人工标注集背书"从一句原则变成可执行检查，
+selftest [17] 有断言钉着。
 
 ## 交付前必经：负向对照（变异测试）
 
@@ -645,7 +647,9 @@ selftest [15] 与变异测试都有覆盖。**审计日志按会话而非按轮�
   改冻结集必须换版本号并在 note 里写明原因。
 
 **实现**：`eval_governance.py dataset` 校验唯一 ID、必填字段（`why`）、正反向覆盖、
-`split` 合法性（dev/validation/frozen）、以及冻结集哈希（改了就红，不靠自觉）。
+`split` 合法性（dev/validation/frozen）、以及**冻结集子集**哈希（只对
+`split == "frozen"` 算，改 dev/validation 是合法迭代不误报；改了 frozen 就红，
+不靠自觉）。
 CI 用 `ci/datasets/ci-compliant.jsonl` 跑真门禁。selftest [17] 与变异测试都有覆盖。
 版本号与变更记录仍是人工纪律（脚本不替你写 note）。
 
