@@ -108,7 +108,8 @@ python skills/ai-eval-harness/assets/selftest.py          # 判据自检
 python skills/ai-eval-harness/assets/mutation_check.py    # 变异测试
 ```
 
-三项在本仓库发布前均验证通过（断言全过、24 个变异全部 caught；条数随技能演进变化，以本地运行输出为准）。
+四项在本仓库发布前均验证通过（断言全过、变异全部 caught；条数随技能演进变化，以本地运行输出为准）。
+`npm test` 另含 `EvalResults.java` 的编译+运行冒烟（无 JDK 时显式跳过，不假装测过）。
 
 ## 退出码约定
 
@@ -120,9 +121,11 @@ python skills/ai-eval-harness/assets/mutation_check.py    # 变异测试
 
 ## 已知边界
 
-- `eval_online.py` 是**骨架**：`login()` / `chat()` / `tool_calls_of()` 需按你的项目契约改写；数据集样例来自摄影订单项目，换项目必须整体替换。
-- 判定逻辑的回归自检 monkeypatch 模块级函数，验证的是判定纪律，不是真实网络路径。
-- `EvalResults.java` 与 `install.ps1` 未在 CI 中自动验证；接入时请先跑一次冒烟。
+- `eval_online.py` 是**骨架**：`login()` / `chat()` / `tool_calls_of()` 需按你的项目契约改写；数据集样例是 `<占位符>` 格式样板，换项目必须整体替换。
+- 判定逻辑的回归自检 monkeypatch 模块级函数，验证的是判定纪律，不是真实网络路径；真实连通性仍需跑一次在线评测。
+- `EvalResults.java` 已进 `npm test` 自动门禁（javac 编译 + 运行 + 与 Python 侧 JSON 形状比对）；`install.ps1` 的安装分支仍需在有仓库副本的环境里手动 `install.ps1 -VerifyOnly`。
+- `eval_rag.py` 不连接任何检索服务：`retrieved` 列表由你的检索系统导出；`ci-eval.yml.example` 是模板，未在真实 GitHub Actions 上执行过。
+- 忠实度 / 引用准确性 / 答案完整性目前只有方法论（RAG 章节），尚无可执行套件；多轮、工具五阶段、数据集治理亦为规范先行。
 
 ## License
 

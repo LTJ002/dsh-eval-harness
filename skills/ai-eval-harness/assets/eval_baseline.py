@@ -49,7 +49,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import sys
 
 # Windows 下 stdout 被重定向（CI 捕获、tee、> 文件）时按本地码页 GBK 编码，
@@ -232,6 +234,50 @@ def suffix(rec: dict) -> str:
     return ""
 
 
+def wilson_interval(passed: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """通过率的 Wilson score 95% 置信区间（闭式解，无 scipy 依赖）。
+
+    为什么不用正态近似 (p ± z*sqrt(p(1-p)/n))：小样本或 p 接近 0/1 时，
+    它会越出 [0,1] 且宽度失真——而本工具最常遇到的正是小 n。
+    Wilson 区间在全通过 (p=1) 时仍给出非退化的下界，正好回答"1/1=100% 能信吗"。
+
+    抽成纯函数是为了能被 selftest 直接断言，而不是 inline 在 main() 里凭信心改。
+    """
+    if total <= 0:
+        return (0.0, 0.0)
+    p = passed / total
+    z2 = z * z
+    denom = 1 + z2 / total
+    center = (p + z2 / (2 * total)) / denom
+    half = (z / denom) * math.sqrt(p * (1 - p) / total + z2 / (4 * total * total))
+    return (max(0.0, center - half), min(1.0, center + half))
+
+
+def case_ids(failures: list[str]) -> set[str]:
+    """从失败明细里抠出用例 ID，供用例级 diff 使用。
+
+    约定：失败明细以 case id 开头（如 "a1 该答未答…"、"g34 未挂门禁"）。
+    取首段 [A-Za-z0-9_.-]+ 作为 id；抽不出 id 的条目跳过，绝不猜——
+    猜错 id 会把"新增失败"报成"修复了"，比不做 diff 更糟。
+    """
+    out: set[str] = set()
+    for f in failures or []:
+        m = re.match(r"^([A-Za-z0-9_.-]+)(?:\s|$)", str(f).strip())
+        if m:
+            out.add(m.group(1))
+    return out
+
+
+def case_diff(base_failures: list[str], cur_failures: list[str]) -> tuple[list[str], list[str]]:
+    """用例级差异：(新增失败, 已修复)。两个集合都按 id 排序，输出稳定可比对。
+
+    汇总数字（掉 1 条）只说"总量变了"，diff 才说明"是哪几条"——
+    这正是评审里"固定测试集 + 用例级差异比较"要的东西。
+    """
+    b, c = case_ids(base_failures), case_ids(cur_failures)
+    return sorted(c - b), sorted(b - c)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="评测基线对比")
     ap.add_argument("--results", required=True, help="结果目录或单文件")
@@ -298,6 +344,11 @@ def main() -> int:
             drop = base["passed"] - p
             allow = args.allow_flip if args.allow_flip is not None \
                 else DEFAULT_ALLOW_FLIP.get(cur["kind"], 0)
+            # 用例级 diff：只在有失败明细时算；抽不出 id 就如实不报，不猜
+            new_failed, fixed = case_diff(base["failures"], cur["failures"])
+            if new_failed or fixed:
+                notes.append(f"「{name}」用例级变化：新增失败={new_failed or '无'}，"
+                             f"已修复={fixed or '无'}")
             if drop > allow:
                 mark = "  ← 退化"
                 failed_names.add(name)
@@ -311,7 +362,9 @@ def main() -> int:
                              f"连续多轮出现同一条则应当真")
             elif drop < 0:
                 notes.append(f"「{name}」提升 {-drop} 条，可考虑更新基线")
-        print(f"  {name:<16} {p}/{t} = {p / t if t else 0:.1%}{suffix(cur)}{mark}")
+        lo, hi = wilson_interval(p, t)
+        print(f"  {name:<16} {p}/{t} = {p / t if t else 0:.1%}"
+              f"  95%CI=[{lo:.1%},{hi:.1%}]{suffix(cur)}{mark}")
 
     for name in sorted(set(baseline) - set(current)):
         msg = f"基线有、本次缺失「{name}」（{baseline[name]['passed']}/{baseline[name]['total']}）"

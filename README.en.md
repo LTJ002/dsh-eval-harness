@@ -1,4 +1,4 @@
-﻿# dsh-eval-harness
+# dsh-eval-harness
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
@@ -98,7 +98,7 @@ python skills/ai-eval-harness/assets/selftest.py
 python skills/ai-eval-harness/assets/mutation_check.py
 ```
 
-All three were green before release (all assertions pass; 24/24 mutations caught — the assertion count evolves with the skill, run it locally for the current number).
+All four were green before release (all assertions pass; all mutations caught — counts evolve with the skill, run it locally for the current numbers). `npm test` also compiles and runs `EvalResults.java` and checks the JSON shape against the Python side (explicitly skipped, not silently faked, when no JDK is present).
 
 ## Exit codes
 
@@ -110,9 +110,11 @@ All three were green before release (all assertions pass; 24/24 mutations caught
 
 ## Known limits
 
-- `eval_online.py` is a **skeleton**: rewrite `login()` / `chat()` / `tool_calls_of()` for your project contract; the sample datasets come from a photography-order project and must be replaced wholesale.
-- The self-test monkeypatches module-level functions; it validates the judging discipline, not real network paths.
-- `EvalResults.java` and `install.ps1` are not CI-verified; smoke-test them on first integration.
+- `eval_online.py` is a **skeleton**: rewrite `login()` / `chat()` / `tool_calls_of()` for your project contract; the sample datasets are `<placeholder>` format templates and must be replaced wholesale.
+- The self-test monkeypatches module-level functions; it validates the judging discipline, not real network paths — a real online run is still needed.
+- `EvalResults.java` is verified by `npm test` (javac compile + run + JSON-shape check against Python). `install.ps1`'s install branch still needs a manual `install.ps1 -VerifyOnly` in an environment that has the repo copy.
+- `eval_rag.py` does not talk to any retrieval service: `retrieved` lists are exported by your system; `ci-eval.yml.example` is a template and has not run on real GitHub Actions.
+- Faithfulness / citation correctness / answer completeness are methodology only (RAG section) so far; multi-turn, tool-call five stages, and dataset governance are also specification-first, without runnable suites yet.
 
 ## License
 

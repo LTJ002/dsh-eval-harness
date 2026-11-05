@@ -272,6 +272,39 @@ MUTATIONS = [
         "    return len(hits) / len(expected)",
         "expected 重复仍能完全命中",
     ),
+    # ---- Wilson 置信区间与用例级 diff（本轮新增判定逻辑）----
+    (
+        "CI 退回点估计（区间退化为单个值）",
+        "eval_baseline.py",
+        "    return (max(0.0, center - half), min(1.0, center + half))",
+        "    return (p, p)",
+        "1/1 全通过下界非退化",
+    ),
+    (
+        "CI 用正态近似越界",
+        "eval_baseline.py",
+        "    return (max(0.0, center - half), min(1.0, center + half))",
+        "    return (p - z * math.sqrt(p * (1 - p) / total) if total else 0.0,\n"
+        "            p + z * math.sqrt(p * (1 - p) / total) if total else 0.0)",
+        "1/1 全通过下界非退化",
+    ),
+    (
+        "用例级 diff 不再区分新增失败",
+        "eval_baseline.py",
+        "    return sorted(c - b), sorted(b - c)",
+        "    return [], sorted(b - c)",
+        "diff 检出新增失败",
+    ),
+    (
+        "case_ids 无 id 时瞎猜",
+        "eval_baseline.py",
+        '        m = re.match(r"^([A-Za-z0-9_.-]+)(?:\\s|$)", str(f).strip())\n'
+        "        if m:\n"
+        "            out.add(m.group(1))",
+        '        m = re.match(r"^([A-Za-z0-9_.-]+)(?:\\s|$)", str(f).strip())\n'
+        "        out.add(m.group(1) if m else str(f).strip()[:8])",
+        "无 id 明细不编造",
+    ),
 ]
 
 

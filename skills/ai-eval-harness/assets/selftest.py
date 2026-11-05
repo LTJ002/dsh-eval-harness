@@ -650,6 +650,39 @@ dsd.rmdir()
 md.rmdir()
 
 
+# ---------- 置信区间与用例级 diff（本轮优化新增，必须可证伪） ----------
+print("\n[12] Wilson 置信区间与用例级 diff")
+WI = B.wilson_interval
+# 全通过时下界不能是 1（否则 "1/1=100% 能信吗" 这个问题会被掩盖）
+lo, hi = WI(1, 1)
+check("1/1 全通过下界非退化", 0 < lo < 1.0 and hi == 1.0, str((lo, hi)))
+# 全失败时上界不能是 0
+lo, hi = WI(0, 5)
+check("0/5 全失败上界非退化", lo == 0.0 and 0 < hi < 1.0, str((lo, hi)))
+# 区间必须包含点估计、且落在 [0,1] 内
+for p, t in [(8, 10), (5, 5), (0, 0), (3, 20), (19, 20)]:
+    lo, hi = WI(p, t)
+    ok = 0 <= lo <= hi <= 1 and (t == 0 or lo <= p / t <= hi)
+    check(f"CI 合法 ({p}/{t})", ok, str((lo, hi)))
+# 样本越大区间越窄（这是"可信度"的直观体现，不是数字游戏）
+check("样本增大区间收窄", (WI(9, 10)[1] - WI(9, 10)[0])
+      > (WI(90, 100)[1] - WI(90, 100)[0]))
+# 用例级 diff：新增失败 / 已修复 / 无 id 不猜
+check("diff 检出新增失败",
+      B.case_diff(["a1 旧失败"], ["a1 旧失败", "a2 新失败"]) == (["a2"], []))
+check("diff 检出已修复",
+      B.case_diff(["a1 旧失败", "a3 也挂"], ["a3 也挂"]) == ([], ["a1"]))
+check("diff 同时检出两侧",
+      B.case_diff(["a1 挂"], ["a2 挂"]) == (["a2"], ["a1"]))
+check("diff 无变化返回空",
+      B.case_diff(["a1 挂"], ["a1 挂"]) == ([], []))
+# 抽不出 id 的条目必须跳过，而不是被当成某个用例
+check("无 id 明细不编造",
+      B.case_ids(["随便一句没有 id 的话"]) == set(), str(B.case_ids(["随便一句没有 id 的话"])))
+check("case_ids 取首段",
+      B.case_ids(["g34 未挂门禁", "a1 该答未答"]) == {"g34", "a1"})
+
+
 for f in t2.glob("*"):
     f.unlink()
 t2.rmdir()

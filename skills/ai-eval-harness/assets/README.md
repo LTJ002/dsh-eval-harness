@@ -7,9 +7,12 @@
 | `mutation_check.py` | **变异测试**：把实现改坏，验证断言会不会翻红。加判据后必跑 | 仅标准库 |
 | `selftest.py` | **自检**：判据与分母纪律的回归测试，改任何脚本后必跑 | 仅标准库 |
 | `eval_results.py` | 结果落盘（分片写入 + `kind` 字段，避免并发覆盖） | 仅标准库 |
-| `eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，CI 卡点 | 仅标准库 |
+| `eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，附 Wilson 置信区间与用例级 diff，CI 卡点 | 仅标准库 |
 | `eval_online.py` | 在线评测骨架：`tool` / `inject` / `answer` 三个套件 | 仅标准库 |
-| `EvalResults.java` | JUnit 场景的结果落盘，JSON 形状与 Python 版一致 | JDK 17 |
+| `eval_rag.py` | RAG 检索层指标：Recall@K / MRR / nDCG@K / Precision@K，双门（完全命中进基线 + 可选阈值） | 仅标准库 |
+| `eval_manifest.py` | 运行清单：提示词/数据集 sha256 指纹 + config + diff | 仅标准库 |
+| `ci-eval.yml.example` | CI/CD 三 gate 模板（自检+变异 / 离线基线 / 在线定时） | GitHub Actions |
+| `EvalResults.java` | JUnit 场景的结果落盘，JSON 形状与 Python 版一致（含 `kind` 字段） | JDK 17 |
 | `install.ps1` | 把 bundle 从仓库副本装到 `~/.dsh/skills/`；`-VerifyOnly` 检查两份是否分叉 | PowerShell |
 | `datasets/*.example.jsonl` | 数据集样例 | — |
 
@@ -147,10 +150,16 @@ selftest 仍然全绿——那批断言根本没覆盖到它自称在测的语�
   跑完自动清理。早期版本直接改写源文件再恢复，进程被杀在写入与恢复之间
   会留下坏源码——隔离是主保护，finally 恢复只是副本内的兜底。
 - 数据集样例（`datasets/*.example.jsonl`）是**格式样板，不是题库**：
-  问法来自写作示例（摄影订单/占位符）。换项目必须整体替换内容——
+  问法来自写作示例（占位符）。换项目必须整体替换内容——
   `eval_rag.py` / `eval_online.py` 在真实数据集缺失时拒绝运行并提示从这里复制，
   这是防呆设计，防止"拿别人的业务题测自己的系统"。
   判据引擎（指标数学、严格度、防误报纪律）与业务无关，换项目零改动。
 - `eval_rag.py` 不连接任何检索服务：`retrieved` 列表由你的检索系统导出
   （日志/DB/评测 API 均可），指标计算只对导出的排序列表负责。
 - `eval_manifest.py` 的 `--set` 只放非敏感运行参数；密钥与个人数据不进清单。
+- `eval_baseline.py` 的置信区间是**描述性**的（Wilson 95% 区间），不是显著性检验；
+  用例级 diff 从失败明细首段抠 case id，明细不按 `id 描述` 格式写就会跳过该条——
+  不猜 ID，猜错会把"新增失败"报成"修复了"。
+- `EvalResults.java` 已进仓库 `npm test` 自动门禁（javac 编译 + 运行 + 与 Python 侧
+  JSON 形状比对）；`install.ps1` 的安装分支仍需在有仓库副本的环境里手动校验。
+- `ci-eval.yml.example` 是模板，未在真实 GitHub Actions 上执行过。

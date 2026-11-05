@@ -48,6 +48,10 @@ public final class EvalResults {
     public static void record(String suite, int passed, int total, List<String> failures) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("suite", suite);
+        // kind 决定基线的严格度：offline 是纯函数、容忍度 0。
+        // Python 版 record() 写入同名字段；Java 版原先漏了，靠文件名前缀
+        // 兜底才能推出 offline——那是隐式依赖，改文件名就会静默变档。
+        payload.put("kind", "offline");
         payload.put("passed", passed);
         payload.put("total", total);
         payload.put("rate", total == 0 ? 0.0 : Math.round(passed * 10000.0 / total) / 10000.0);
