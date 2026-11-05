@@ -88,7 +88,8 @@ RAG 等于白做。这不是模型的错，是提示词与知识库互相矛盾�
 **`mustContain` 有一个措辞判据管不到的盲区：极性**。「改期要提前多久」配 `mustContain: ["48"]`，
 「不需要提前 48 小时申请」这种**意思答反**的回答照样命中 `48`——文本匹配只证明数字出现了，
 不证明方向对了。所以数字型断言要配 `mustNotContain` 写出"答反时的形态"（如 `["不需要提前",
-"无需提前"]`）；真正要数值、单位、方向全对时，升级成结构化判据（见下文「从关键词到结构化判据」）。
+"无需提前"]`）；真正要数值、单位、方向全对时，用 `expected` 结构化判据（下面这段就是实现，
+不是纸面建议）。
 
 ```jsonl
 {"id":"a1","question":"改期要提前多久","mustContain":["48"],
@@ -96,6 +97,12 @@ RAG 等于白做。这不是模型的错，是提示词与知识库互相矛盾�
  "expectedSource":"appointment_policy.md#48h",
  "why":"mustContain 只抓数字出现；expected 声明数值/单位/方向全对才算对"}
 ```
+
+`eval_online.py` 的 `check_expected()` 是**可执行实现**（纯函数，selftest 有断言、变异测试有对应变异点）：
+四步依次校验符号 → 数值（含千分位/货币归一化与 tolerance）→ 单位（支持 `unitAliases`）→
+极性（"不需要提前 48 小时"判失败）。符号必须**先于**数值判——`-100` 与 `100`
+数值差 200，先走数值门就永远报不出"方向错了"。回答里没有可解析数字时明确报
+"不可判定"，不猜。
 
 判据优先用能拿到的最强档：没有结构化来源时 `mustContain`+`mustNotContain` 兜底，
 有服务端结构化结果时必须比对 `expected`（数值、单位、正负号、极性），并用
@@ -268,13 +275,15 @@ n ≥ 10  → 才谈得上比率
 
 | 套件 | 测什么 | 判据来源 | 基线 kind |
 |---|---|---|---|
-| `tool` | 给了问题，模型是否调了正确的工具 | 审计表 TOOL_CALL 记录 | `live` |
+| `tool` | 工具选择 + **五阶段**（选对/参数/执行成功/结果/回答用真实结果）+ 幂等/重试/越权 | 审计表 TOOL_CALL 记录 + 完整副作用记录 | `live` |
 | `inject` | 对抗样本下是否泄漏系统提示词 | 禁词 + 未打码 PII + 副作用 | **`live-strict`（零容忍）** |
-| `answer` | **双向**：该答的答没答、不该答的答了没 | 事实词命中 / 结果形态 / 拒答话术 | `live` |
+| `answer` | **双向** + `expected` 结构化判据（数值/单位/符号/极性） | 事实词命中 / 结果形态 / 拒答话术 / 结构化结果 | `live` |
+| `multi-turn` | 上下文继承、条件修改、多轮越权诱导 | 每轮文本判据 + 累积副作用 | **`live-strict`**（诱导泄漏不豁免） |
 | （数值溯源） | 模型报的业务数字能否在工具返回值里找到 | 服务端直出卡片（含符号与单位） | `live-strict` |
 
 `answer` 套件是后加的，因为前三个都是**单向断言**（"不得泄漏""不得误调"），
 测不出"检索到了却推诿不答"这类故障——本项目真发生过，且当时评测全绿。
+四个套件都在 `SUITES` 里，`--all` 会依次跑；安全类两个套件落 `live-strict`。
 
 ### 基线对比：让退化可见
 
@@ -571,6 +580,12 @@ if tested == 0:
 （forbiddenTools）、失败后是否编造成功文案。这四类每一类都需要数据集里有对应用例，
 否则门禁只存在于文档里。
 
+**实现**：`eval_online.py` 的 `check_tool_stages()` 是纯函数，从
+`tool_call_records()`（外部副作用记录，三态纪律同 `tool_calls_of`）读完整记录，
+按五阶段 + 四类门禁逐项给失败原因；`online-tool.example.jsonl` 的 `t02`（参数）、
+`t04`（全五阶段 + 幂等）是对应样例。selftest [14] 与变异测试都有覆盖。
+审计记录不可读时该用例进 `unobservable`，不判失败——"看不见"不是"做错了"。
+
 ## 多轮对话评测：单轮测不出的故障要单独立套件
 
 单轮断言全绿，多轮照样会坏：上下文丢失、指令被后续轮覆盖、多轮诱导泄漏——
@@ -590,6 +605,14 @@ if tested == 0:
 最后轮"话术圆回来"是常见假通过；上一步工具的真实执行结果是否被下一步正确使用
 （阶段 5 的多轮版）；安全类多轮用例同样落 `live-strict`（诱导泄漏不豁免）。
 多轮用例在数据集里存成消息数组（见下节数据集治理），别用多行 JSONL 硬凑。
+
+**实现**：`eval_online.py` 的 `run_multi_turn_suite()` 按 `turns` 数组逐轮跑
+（同一 session id 保持上下文），每轮复用 `mustContain` / `mustNotContain` /
+`mustRefuse` / `expected` 判据，并按 `expectedToolsPerTurn` 查累积副作用；
+`online-multi-turn.example.jsonl` 有条件修改、上下文继承、越权诱导三条样例。
+selftest [15] 与变异测试都有覆盖。**审计日志按会话而非按轮次归属**，所以
+`expectedToolsPerTurn` 是累积语义（"到第 i 轮为止应已出现过"）——不猜轮次归属，
+猜错会把"没测到"报成"调错工具"。
 
 ## 评测数据集治理
 
@@ -681,12 +704,12 @@ python eval_baseline.py --results eval-results --baseline eval/baseline.json
 | `assets/selftest.py` | 自检：判据与分母纪律的回归测试，**改任何脚本后必跑** |
 | `assets/eval_results.py` | 结果落盘（每个 suite 一个分片 + `kind` 字段，避免并发写丢数据） |
 | `assets/eval_baseline.py` | 基线对比：**按绝对条数**判退化，offline/live-strict/live 分严格度，分母变化不判定 |
-| `assets/eval_online.py` | 在线评测骨架，**已内置五条防误报的正确写法** |
+| `assets/eval_online.py` | 在线评测骨架，四套件（`tool` / `inject` / `answer` / `multi-turn`），**已内置五条防误报的正确写法** + `expected` 结构化判据 + 工具五阶段 |
 | `assets/eval_rag.py` | **RAG 检索层指标**：Recall@K / MRR / nDCG@K / Precision@K，纯函数可断言；双门（完全命中进 offline 基线零容忍 + 可选套件阈值） |
 | `assets/eval_manifest.py` | **运行清单**：提示词与数据集 sha256 指纹 + config + `manifest_diff()`，回答"这次和上次为什么不一样" |
 | `assets/ci-eval.yml.example` | **CI/CD 三 gate 模板**：评测器自检+变异 / 离线基线（退出码 1、2 都阻断）/ 在线定时 |
 | `assets/EvalResults.java` | JUnit 场景用，产出的 JSON 形状与 Python 版一致 |
-| `assets/datasets/*.example.jsonl` | 数据集样例 |
+| `assets/datasets/*.example.jsonl` | 数据集样例：answer（含 `expected`）/ tool（含五阶段）/ inject / multi-turn / rag-retrieval |
 | `assets/install.ps1` | 把 bundle 从仓库副本装到用户级 skill 根；`-VerifyOnly` 查两份是否分叉 |
 | `assets/README.md` | 接入真实项目的改动清单、退出码约定、已知边界 |
 

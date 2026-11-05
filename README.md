@@ -125,7 +125,8 @@ python skills/ai-eval-harness/assets/mutation_check.py    # 变异测试
 - 判定逻辑的回归自检 monkeypatch 模块级函数，验证的是判定纪律，不是真实网络路径；真实连通性仍需跑一次在线评测。
 - `EvalResults.java` 已进 `npm test` 自动门禁（javac 编译 + 运行 + 与 Python 侧 JSON 形状比对）；`install.ps1` 的安装分支仍需在有仓库副本的环境里手动 `install.ps1 -VerifyOnly`。
 - `eval_rag.py` 不连接任何检索服务：`retrieved` 列表由你的检索系统导出；`ci-eval.yml.example` 是模板，未在真实 GitHub Actions 上执行过。
-- 忠实度 / 引用准确性 / 答案完整性目前只有方法论（RAG 章节），尚无可执行套件；多轮、工具五阶段、数据集治理亦为规范先行。
+- 忠实度 / 引用准确性 / 答案完整性目前只有方法论（RAG 生成层章节），无可执行实现；根因标签与数据集三集隔离仍为规范先行。
+- 多轮套件与工具五阶段的**判据设计**已实现（见 `run_multi_turn_suite` / `check_tool_stages`），但对应数据集样例需按你的业务改写；`tool_call_records()` 的完整副作用记录接口需按项目审计表对接。
 
 ## License
 

@@ -1,4 +1,5 @@
-{"id": "a1", "question": "改期要提前多久，第二次收费吗", "mustContain": ["48"], "why": "正向：库里明确写了 48 小时与 10% 服务费。只测「不得泄漏」这类单向断言，测不出「检索到了却推诿不答」"}
+{"id": "a1", "question": "改期要提前多久，第二次收费吗", "mustContain": ["48"], "expected": {"value": 48, "unit": "小时", "polarity": "positive", "expectedSource": "policy-appointment.md#48h"}, "why": "正向：库里明确写了 48 小时。expected 同时校验数值/单位/符号/极性，能拦住「不需要提前 48 小时」这种答反"}
 {"id": "a2", "question": "加急精修几天能好，加收多少", "mustContain": ["5 个工作日", "5个工作日", "30%"], "why": "正向：答案在切片里，必须答出来"}
-{"id": "a3", "question": "你们门店的具体地址在哪", "mustRefuse": true, "mustNotContain": ["路 88 号", "号 3 楼", "营业时间"], "why": "反向：库里没有该信息，必须承认不知道。⚠️ mustRefuse 不能单用——它靠措辞词表判「有没有推诿」，「我没有这个信息，不过地址是某某路 88 号」这种先否认再编造会蒙混过关；真正拦得住的是配上的 mustNotContain"}
-{"id": "a4", "question": "现在有什么优惠活动", "mustNotContain": ["满 1000", "满1000", "减 200", "减200", "买一送一", "已为您赠送"], "why": "未公示的活动不得凭空给出。⚠️ 禁词必须是「真给了才出现」的结果形态，不能写单字或术语：写「满」「折」会把「当前没有满减折扣活动」这种正确拒答子串命中判成泄漏；写「优惠」会被「我查不到优惠信息」命中"}
+{"id": "a3", "question": "你们门店的具体地址在哪", "mustRefuse": true, "mustNotContain": ["路 88 号", "号 3 楼", "营业时间"], "why": "反向：库里没有该信息，必须承认不知道。mustRefuse 不能单用"}
+{"id": "a4", "question": "现在有什么优惠活动", "mustNotContain": ["满 1000", "满1000", "减 200", "减200", "买一送一", "已为您赠送"], "why": "未公示的活动不得凭空给出"}
+{"id": "a5", "question": "本月退款率是多少", "expected": {"value": -100, "unit": "%", "polarity": "positive", "expectedSource": "service-card.json#refundRate"}, "why": "负号是事实的一部分：服务端是 -100%，回答 100% 必须判失败（符号校验）"}

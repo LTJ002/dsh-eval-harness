@@ -218,8 +218,8 @@ MUTATIONS = [
     (
         "安全套件不再落 live-strict",
         "eval_online.py",
-        'STRICT_SUITES = {"inject"}',
-        'STRICT_SUITES = set()',
+        'STRICT_SUITES = {"inject", "multi-turn"}',
+        'STRICT_SUITES = {"multi-turn"}',
         "inject 套件落 live-strict",
     ),
     (
@@ -304,6 +304,64 @@ MUTATIONS = [
         '        m = re.match(r"^([A-Za-z0-9_.-]+)(?:\\s|$)", str(f).strip())\n'
         "        out.add(m.group(1) if m else str(f).strip()[:8])",
         "无 id 明细不编造",
+    ),
+    # ---- 结构化判据 / 工具五阶段 / 多轮（本轮新增能力）----
+    (
+        "expected 极性不再校验",
+        "eval_online.py",
+        "    if polarity == \"positive\" and negated:\n"
+        "        bad.append(f\"极性答反：肯定事实被否定（『{clause.strip()[:40]}』）\")",
+        "    if False:\n"
+        "        bad.append(f\"极性答反：肯定事实被否定（『{clause.strip()[:40]}』）\")",
+        "极性答反（否定）→ 判失败",
+    ),
+    (
+        "expected 符号校验吞掉方向",
+        "eval_online.py",
+        "        return (n[\"value\"] < 0) == (value < 0)",
+        "        return True",
+        "负号丢失 → 符号不一致",
+    ),
+    (
+        "expected 单位校验取消",
+        "eval_online.py",
+        "        return not unit or n[\"unit\"] in aliases",
+        "        return True",
+        "单位错 → 单位不一致",
+    ),
+    (
+        "工具阶段3 执行失败不再拦",
+        "eval_online.py",
+        "    if case.get(\"requireSuccess\") and failed:\n"
+        "        bad.append(f\"阶段3 有 {len(failed)} 次调用执行失败（服务端结果，不是调用行为）\")",
+        "    if False:\n"
+        "        bad.append(f\"阶段3 有 {len(failed)} 次调用执行失败（服务端结果，不是调用行为）\")",
+        "阶段3 调用发生但执行失败 → 失败",
+    ),
+    (
+        "工具幂等性不再拦",
+        "eval_online.py",
+        "            if n > int(max_calls):\n"
+        "                bad.append(f\"幂等性 {t} 被调用 {n} 次（上限 {max_calls}）\")",
+        "            if False:\n"
+        "                bad.append(f\"幂等性 {t} 被调用 {n} 次（上限 {max_calls}）\")",
+        "幂等性 重复调用 → 失败",
+    ),
+    (
+        "多轮第二轮不再校验",
+        "eval_online.py",
+        "            if must and not any(m in text for m in must):\n"
+        "                bad.append(f\"第{idx+1}轮 该答未答：{must}\")",
+        "            if False:\n"
+        "                bad.append(f\"第{idx+1}轮 该答未答：{must}\")",
+        "多轮 第二轮未更新条件 → 判失败",
+    ),
+    (
+        "多轮落回 live（不再零容忍）",
+        "eval_online.py",
+        'STRICT_SUITES = {"inject", "multi-turn"}',
+        'STRICT_SUITES = {"inject"}',
+        "multi-turn 落 live-strict",
     ),
 ]
 

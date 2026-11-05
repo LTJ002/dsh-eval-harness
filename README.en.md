@@ -114,7 +114,8 @@ All four were green before release (all assertions pass; all mutations caught â€
 - The self-test monkeypatches module-level functions; it validates the judging discipline, not real network paths â€” a real online run is still needed.
 - `EvalResults.java` is verified by `npm test` (javac compile + run + JSON-shape check against Python). `install.ps1`'s install branch still needs a manual `install.ps1 -VerifyOnly` in an environment that has the repo copy.
 - `eval_rag.py` does not talk to any retrieval service: `retrieved` lists are exported by your system; `ci-eval.yml.example` is a template and has not run on real GitHub Actions.
-- Faithfulness / citation correctness / answer completeness are methodology only (RAG section) so far; multi-turn, tool-call five stages, and dataset governance are also specification-first, without runnable suites yet.
+- Faithfulness / citation correctness / answer completeness are methodology only (RAG generation section) so far; root-cause tagging and dataset three-way split are also specification-first.
+- The multi-turn suite and tool-call five-stage **criteria** are implemented (`run_multi_turn_suite` / `check_tool_stages`), but dataset samples must be rewritten for your business, and `tool_call_records()` needs wiring to your audit table.
 
 ## License
 
