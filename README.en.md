@@ -3,7 +3,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-8A2BE2)](https://github.com/topics/dsh-plugin)
 
-An **agent application development evaluation toolkit** for DeepSeek Harness (DSH). The point is not to produce scores but to make **every number reproducible, comparable, and honest**: judgments come from external facts (audit tables, server-side structured results, deterministic rules), criteria are bidirectional (should-have-answered vs. should-not-have-answered), and mutation tests prove the evaluators themselves catch regressions. Covers RAG retrieval, tool calls, prompt safety, and multi-turn evaluation design.
+An **agent application development evaluation skill** (skill bundle) for DeepSeek Harness (DSH). The point is not to produce scores but to make **every number reproducible, comparable, and honest**: judgments come from external facts (audit tables, server-side structured results, deterministic rules), criteria are bidirectional (should-have-answered vs. should-not-have-answered), and mutation tests prove the evaluators themselves catch regressions. Covers RAG retrieval, tool calls, prompt safety, and multi-turn evaluation design.
+
+> **Form factor**: this repo is a **skill bundle** — `dsh.bundle` registers `skills/ai-eval-harness/SKILL.md` into `ctx.skills` as a bundled provider, so an agent loads the methodology and asset scripts. It is **not a host feature plugin**: no `dsh.client`, no host UI/commands, no runtime code injection.
+>
+> **Host requirements are deliberately undeclared**: `package.json` intentionally omits `dsh.compatibility.dsh`. This bundle only uses the public skill-registration interface and has not been tested across multiple DSH host versions, so no compatibility range is guessed or claimed. `engines.node >= 20` is a build/CI requirement for this repo only, **not** a DSH host version requirement; add `dsh.compatibility.dsh` yourself only after testing on your target host version.
 
 > The skill body and evaluator docs are written in Chinese; see the [Chinese README](README.md) for the full narrative. This file is a functional summary.
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-eval-harness",
   "version": "1.0.0",
-  "description": "Agent application evaluation toolkit shipped as a DSH skill: offline/online suites judged from audit side effects, baseline diff with zero tolerance for safety regressions, and mutation tests proving the evaluators themselves catch regressions. Framework-agnostic: needs a callable chat endpoint and queryable tool-call records. Documentation is in Chinese.",
+  "description": "Agent application development evaluation skill (skill bundle) for DeepSeek Harness: methodology plus runnable evaluator assets, not a host feature plugin.",
   "type": "module",
   "main": "index.js",
   "files": [
